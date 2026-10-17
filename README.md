@@ -28,7 +28,7 @@ Use the included `render.yaml` Blueprint, select the **Free** web service plan i
 - `BOOTSTRAP_ADMIN_EMAIL`: email address for the initial administrator.
 - `BOOTSTRAP_ADMIN_PASSWORD`: a unique password with at least 14 characters.
 - `BOOTSTRAP_ADMIN_NAME`: optional display name for the initial administrator.
-- `CORS_ORIGINS`: the exact public origin of the Hugging Face Space, such as `https://sharmake-maqsuud-ict-pos.hf.space`.
+- `CORS_ORIGINS`: additional exact browser origins allowed to call the API. The deployed Hugging Face Static Space origin is allowed by default: `https://sharmake-maqsuud-ict-pos.static.hf.space`.
 - `NODE_ENV`: set to `production`.
 
 You may use `TIDB_HOST`, `TIDB_PORT`, `TIDB_USER`, `TIDB_PASSWORD`, and `TIDB_DATABASE` instead of `TIDB_URL`.

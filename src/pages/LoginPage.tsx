@@ -359,7 +359,7 @@ export const LoginPage: React.FC = () => {
 
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                Security Passkey
+                Operator Password
               </label>
               <div className="relative">
                 <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-600 dark:text-emerald-400" />
@@ -369,7 +369,7 @@ export const LoginPage: React.FC = () => {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your security passkey"
+                  placeholder="Enter your account password"
                   className="w-full pl-10 pr-10 py-2.5 bg-[#f4f8f6] dark:bg-[#090e0c] border border-emerald-950/12 dark:border-white/12 rounded-xl text-slate-900 dark:text-white text-sm placeholder-slate-400 dark:placeholder-slate-500 focus:outline-hidden focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 transition-all"
                 />
                 <button
