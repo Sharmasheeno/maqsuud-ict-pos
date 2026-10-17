@@ -1,4 +1,4 @@
-const CACHE_NAME = 'maqsuud-ict-pos-v2';
+const CACHE_NAME = 'maqsuud-ict-pos-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -31,22 +31,14 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Leave API requests to the browser's normal network stack. Caching API
+  // responses here can expose stale or account-specific data, and a failed
+  // cache lookup must not resolve respondWith() with undefined.
+  if (new URL(event.request.url).pathname.startsWith('/api/')) return;
   if (event.request.method !== 'GET') return;
-  if (event.request.url.includes('/api/')) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return response;
-        })
-        .catch(() => caches.match(event.request))
-    );
-  } else {
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
-        return cached || fetch(event.request);
-      })
-    );
-  }
+  event.respondWith(
+    caches.match(event.request).then((cached) => {
+      return cached || fetch(event.request);
+    })
+  );
 });
