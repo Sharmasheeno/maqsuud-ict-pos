@@ -1,0 +1,6 @@
+{
+  "name": "Maqsuud ICT POS",
+  "description": "Maqsuud ICT — Smart POS & Enterprise Management. Next-Gen ICT & Retail Intelligence with QR Code Scanning, POS Checkout, Invoices, Customer & Supplier Debts, Ledgers, Purchases, Inventory, COGS & Financial Reports.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
