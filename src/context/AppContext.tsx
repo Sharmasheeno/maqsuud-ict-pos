@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { api, setStoredToken, getStoredToken } from '../services/apiService';
 import { translations, Language } from '../locales/translations';
 
-export type ThemeMode = 'light' | 'dark' | 'system';
+export type ThemeMode = 'light' | 'dark';
 
 interface User {
   id: string;
@@ -61,13 +61,6 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
-
-const getSystemTheme = (): 'light' | 'dark' => {
-  if (typeof window !== 'undefined' && window.matchMedia) {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  }
-  return 'light';
-};
 
 const computeCountdown = (business: any): SubscriptionCountdown => {
   if (!business) {
@@ -147,16 +140,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
-    const saved = localStorage.getItem('maqsuud_theme') as ThemeMode | null;
-    if (saved === 'light' || saved === 'dark' || saved === 'system') {
-      return saved;
-    }
-    return 'light';
+    const saved = localStorage.getItem('maqsuud_theme');
+    return saved === 'dark' ? 'dark' : 'light';
   });
 
-  const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(getSystemTheme);
-
-  const resolvedTheme: 'light' | 'dark' = themeMode === 'system' ? systemTheme : themeMode;
+  const resolvedTheme: 'light' | 'dark' = themeMode;
 
   const [activePage, setActivePageState] = useState<string>('dashboard');
   const [currency, setCurrencyState] = useState<string>('USD');
@@ -195,17 +183,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setActivePageState(page);
   };
-
-  // Listen to OS/Device color-scheme changes in real time
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e: MediaQueryListEvent) => {
-      setSystemTheme(e.matches ? 'dark' : 'light');
-    };
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
 
   // Sync resolved theme with HTML root class & color-scheme
   useEffect(() => {
@@ -283,10 +260,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const toggleTheme = () => {
-    setThemeModeState((prev) => {
-      const currentEffective = prev === 'system' ? getSystemTheme() : prev;
-      return currentEffective === 'dark' ? 'light' : 'dark';
-    });
+    setThemeModeState((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
   const logout = () => {

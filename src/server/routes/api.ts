@@ -162,8 +162,8 @@ router.put('/auth/profile', (req, res) => {
 router.post('/auth/change-password', (req, res) => {
   const { currentPassword, newPassword } = req.body;
   const userId = (req as any).user.id;
-  if (!newPassword || newPassword.length < 12) {
-    return res.status(400).json({ success: false, message: 'New password must be at least 12 characters long.' });
+  if (!newPassword || newPassword.length < 6) {
+    return res.status(400).json({ success: false, message: 'New password must be at least 6 characters long.' });
   }
 
   let success = false;
@@ -518,6 +518,7 @@ router.put('/products/:id', (req, res) => {
         ...updates,
         purchaseCost: updates.purchaseCost !== undefined ? parseFloat(updates.purchaseCost) : prev.purchaseCost,
         sellingPrice: updates.sellingPrice !== undefined ? parseFloat(updates.sellingPrice) : prev.sellingPrice,
+        minStock: updates.minStock !== undefined ? parseInt(updates.minStock) : prev.minStock,
         stock: newStock,
         updatedAt: new Date().toISOString(),
       };
@@ -592,6 +593,51 @@ router.post('/categories', (req, res) => {
   const cat = { id: 'cat_' + Date.now(), name, description: description || '' };
   dbStore.update((d) => d.categories.push(cat));
   return res.json({ success: true, category: cat });
+});
+
+router.put('/categories/:id', (req, res) => {
+  const { id } = req.params;
+  const { name, description } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ success: false, message: 'Category name is required' });
+  }
+  let updated: any = null;
+  dbStore.update((d) => {
+    const c = d.categories.find((cat) => cat.id === id);
+    if (c) {
+      const oldName = c.name;
+      c.name = name.trim();
+      if (description !== undefined) c.description = description;
+      if (oldName !== c.name) {
+        d.products.forEach((p) => {
+          if (p.category === oldName) {
+            p.category = c.name;
+          }
+        });
+      }
+      updated = c;
+    }
+  });
+  if (updated) {
+    return res.json({ success: true, message: 'Category updated successfully', category: updated });
+  }
+  return res.status(404).json({ success: false, message: 'Category not found' });
+});
+
+router.delete('/categories/:id', (req, res) => {
+  const { id } = req.params;
+  let deleted = false;
+  dbStore.update((d) => {
+    const idx = d.categories.findIndex((cat) => cat.id === id);
+    if (idx !== -1) {
+      d.categories.splice(idx, 1);
+      deleted = true;
+    }
+  });
+  if (deleted) {
+    return res.json({ success: true, message: 'Category deleted successfully' });
+  }
+  return res.status(404).json({ success: false, message: 'Category not found' });
 });
 
 // ----------------------------------------------------
@@ -684,7 +730,7 @@ router.post('/customers', (req, res) => {
 
 router.put('/customers/:id', (req, res) => {
   const { id } = req.params;
-  const { name, phone, email, address, notes } = req.body;
+  const { name, phone, email, address, notes, openingBalance, currentBalance } = req.body;
   let updated: any = null;
 
   dbStore.update((d) => {
@@ -695,6 +741,30 @@ router.put('/customers/:id', (req, res) => {
       if (email !== undefined) c.email = email;
       if (address !== undefined) c.address = address;
       if (notes !== undefined) c.notes = notes;
+      if (openingBalance !== undefined && !isNaN(parseFloat(openingBalance))) {
+        const newOpen = parseFloat(openingBalance);
+        if (newOpen !== c.openingBalance) {
+          const diff = newOpen - c.openingBalance;
+          const prevBal = c.currentBalance;
+          c.openingBalance = newOpen;
+          c.currentBalance = parseFloat((c.currentBalance + diff).toFixed(2));
+          d.customerLedger.unshift({
+            id: 'cld_' + Date.now(),
+            customerId: c.id,
+            date: new Date().toISOString(),
+            type: 'OPENING_BALANCE',
+            description: 'Admin adjusted customer opening balance',
+            debit: diff > 0 ? diff : 0,
+            credit: diff < 0 ? Math.abs(diff) : 0,
+            previousBalance: prevBal,
+            newBalance: c.currentBalance,
+            createdBy: (req as any).user?.name || 'Admin',
+          });
+        }
+      }
+      if (currentBalance !== undefined && !isNaN(parseFloat(currentBalance))) {
+        c.currentBalance = parseFloat(currentBalance);
+      }
       c.updatedAt = new Date().toISOString();
       updated = c;
     }
@@ -712,7 +782,7 @@ router.delete('/customers/:id', (req, res) => {
     const c = d.customers.find((item) => item.id === id);
     if (c) c.isArchived = true;
   });
-  return res.json({ success: true, message: 'Customer archived' });
+  return res.json({ success: true, message: 'Customer deleted successfully' });
 });
 
 // Record Customer Payment (Rasiid)
@@ -887,6 +957,48 @@ router.post('/suppliers', (req, res) => {
   });
 
   return res.json({ success: true, message: 'Supplier added successfully', supplier: newSupp });
+});
+
+router.put('/suppliers/:id', (req, res) => {
+  const { id } = req.params;
+  const { name, contactPerson, phone, email, address, notes, openingBalance } = req.body;
+  let updated: any = null;
+
+  dbStore.update((d) => {
+    const s = d.suppliers.find((supp) => supp.id === id);
+    if (s) {
+      if (name) s.name = name;
+      if (contactPerson !== undefined) s.contactPerson = contactPerson;
+      if (phone) s.phone = phone;
+      if (email !== undefined) s.email = email;
+      if (address !== undefined) s.address = address;
+      if (notes !== undefined) s.notes = notes;
+      if (openingBalance !== undefined && !isNaN(parseFloat(openingBalance))) {
+        const newOpen = parseFloat(openingBalance);
+        if (newOpen !== s.openingBalance) {
+          const diff = newOpen - s.openingBalance;
+          s.openingBalance = newOpen;
+          s.currentBalance = parseFloat((s.currentBalance + diff).toFixed(2));
+        }
+      }
+      s.updatedAt = new Date().toISOString();
+      updated = s;
+    }
+  });
+
+  if (updated) {
+    return res.json({ success: true, message: 'Supplier updated successfully', supplier: updated });
+  }
+  return res.status(404).json({ success: false, message: 'Supplier not found' });
+});
+
+router.delete('/suppliers/:id', (req, res) => {
+  const { id } = req.params;
+  dbStore.update((d) => {
+    const s = d.suppliers.find((item) => item.id === id);
+    if (s) s.isArchived = true;
+  });
+  return res.json({ success: true, message: 'Supplier deleted successfully' });
 });
 
 // Record Supplier Payment
@@ -1988,6 +2100,56 @@ router.post('/users', (req, res) => {
   return res.json({ success: true, message: 'User added successfully', user: newUser });
 });
 
+router.put('/users/:id', (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const { id } = req.params;
+  const { name, email, role, phone, password, isActive } = req.body;
+
+  const db = dbStore.get();
+  if (email && db.users.some((u) => u.id !== id && u.email.toLowerCase() === email.toLowerCase())) {
+    return res.status(400).json({ success: false, message: 'Another operator already uses this email address.' });
+  }
+
+  let updatedUser: any = null;
+  dbStore.update((d) => {
+    const u = d.users.find((user) => user.id === id);
+    if (u) {
+      if (name) u.name = name.trim();
+      if (email) u.email = email.trim();
+      if (role) u.role = role;
+      if (phone !== undefined) u.phone = phone;
+      if (isActive !== undefined) u.isActive = Boolean(isActive);
+      if (password && String(password).trim().length > 0) {
+        u.passwordHash = bcrypt.hashSync(String(password).trim(), 10);
+      }
+      updatedUser = {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        phone: u.phone,
+        isActive: u.isActive,
+        createdAt: u.createdAt,
+      };
+      d.auditLogs.unshift({
+        id: 'log_' + Date.now(),
+        timestamp: new Date().toISOString(),
+        action: 'USER_UPDATED',
+        entity: 'User',
+        entityId: u.id,
+        userId: (req as any).user?.id || 'usr_admin',
+        userName: (req as any).user?.name || 'Admin',
+        details: `Updated operator account ${u.name} (${u.email}, role: ${u.role})`,
+      });
+    }
+  });
+
+  if (updatedUser) {
+    return res.json({ success: true, message: 'Operator updated successfully', user: updatedUser });
+  }
+  return res.status(404).json({ success: false, message: 'User not found' });
+});
+
 router.put('/users/:id/status', (req, res) => {
   if (!requireAdmin(req, res)) return;
   const { id } = req.params;
@@ -2001,6 +2163,60 @@ router.put('/users/:id/status', (req, res) => {
   });
 
   return res.json({ success: true, message: 'User status updated' });
+});
+
+router.delete('/users/:id', (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const { id } = req.params;
+
+  if (id === (req as any).user?.id) {
+    return res.status(400).json({
+      success: false,
+      message: 'You cannot delete your own active administrator account.',
+    });
+  }
+
+  let deleted = false;
+  dbStore.update((d) => {
+    const idx = d.users.findIndex((user) => user.id === id);
+    if (idx !== -1) {
+      const removed = d.users[idx];
+      d.users.splice(idx, 1);
+      deleted = true;
+      d.auditLogs.unshift({
+        id: 'log_' + Date.now(),
+        timestamp: new Date().toISOString(),
+        action: 'USER_DELETED',
+        entity: 'User',
+        entityId: id,
+        userId: (req as any).user?.id || 'usr_admin',
+        userName: (req as any).user?.name || 'Admin',
+        details: `Deleted operator account ${removed.name} (${removed.email})`,
+      });
+    }
+  });
+
+  if (deleted) {
+    return res.json({ success: true, message: 'Operator deleted permanently' });
+  }
+  return res.status(404).json({ success: false, message: 'User not found' });
+});
+
+router.delete('/invoices/:id', (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const { id } = req.params;
+  let deleted = false;
+  dbStore.update((d) => {
+    const idx = d.invoices.findIndex((i) => i.id === id || i.invoiceNumber === id);
+    if (idx !== -1) {
+      d.invoices.splice(idx, 1);
+      deleted = true;
+    }
+  });
+  if (deleted) {
+    return res.json({ success: true, message: 'Invoice deleted successfully' });
+  }
+  return res.status(404).json({ success: false, message: 'Invoice not found' });
 });
 
 router.get('/roles', (req, res) => {

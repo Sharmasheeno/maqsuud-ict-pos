@@ -4,7 +4,6 @@ import {
   Menu,
   Moon,
   Sun,
-  Monitor,
   Globe,
   Coins,
   QrCode,
@@ -58,7 +57,6 @@ export const Topbar: React.FC<TopbarProps> = ({
   const themeOptions: { mode: ThemeMode; label: string; desc: string; icon: React.FC<{ className?: string }> }[] = [
     { mode: 'light', label: 'Light Mode', desc: 'Frosted Alabaster UI', icon: Sun },
     { mode: 'dark', label: 'Dark Mode', desc: 'Carbon Obsidian UI', icon: Moon },
-    { mode: 'system', label: 'System Default', desc: 'Match Device OS', icon: Monitor },
   ];
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -234,7 +232,7 @@ export const Topbar: React.FC<TopbarProps> = ({
               </AnimatePresence>
             </div>
 
-            {/* Light / Dark / System Theme Selector */}
+            {/* Light / Dark Theme Selector */}
             <div className="relative">
               <button
                 onClick={() => {
@@ -243,11 +241,9 @@ export const Topbar: React.FC<TopbarProps> = ({
                   setLangDropdown(false);
                 }}
                 className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-[#f1f5f3] dark:bg-[#141e19] border border-emerald-950/8 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-emerald-500/40 transition-colors text-xs font-bold"
-                title="Change Theme (Light / Dark / System)"
+                title="Change Theme (Light / Dark)"
               >
-                {themeMode === 'system' ? (
-                  <Monitor className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                ) : theme === 'dark' ? (
+                {theme === 'dark' ? (
                   <Moon className="w-4 h-4 text-emerald-400" />
                 ) : (
                   <Sun className="w-4 h-4 text-amber-500" />

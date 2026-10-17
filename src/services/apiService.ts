@@ -99,6 +99,8 @@ export const api = {
   // Categories
   getCategories: () => request<any>('/api/categories'),
   createCategory: (data: any) => request<any>('/api/categories', { method: 'POST', body: JSON.stringify(data) }),
+  updateCategory: (id: string, data: any) => request<any>(`/api/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCategory: (id: string) => request<any>(`/api/categories/${id}`, { method: 'DELETE' }),
 
   // Customers & Debts & Payments
   getCustomers: (search?: string) => {
@@ -118,6 +120,8 @@ export const api = {
   },
   getSupplierById: (id: string) => request<any>(`/api/suppliers/${id}`),
   createSupplier: (data: any) => request<any>('/api/suppliers', { method: 'POST', body: JSON.stringify(data) }),
+  updateSupplier: (id: string, data: any) => request<any>(`/api/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteSupplier: (id: string) => request<any>(`/api/suppliers/${id}`, { method: 'DELETE' }),
   recordSupplierPayment: (data: any) => request<any>('/api/supplier-payments', { method: 'POST', body: JSON.stringify(data) }),
 
   // POS Checkout & Invoices
@@ -132,6 +136,7 @@ export const api = {
   getInvoiceById: (id: string) => request<any>(`/api/invoices/${id}`),
   refundInvoice: (id: string, reason?: string) =>
     request<any>(`/api/invoices/${id}/refund`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  deleteInvoice: (id: string) => request<any>(`/api/invoices/${id}`, { method: 'DELETE' }),
 
   // Purchases
   getPurchases: () => request<any>('/api/purchases'),
@@ -172,7 +177,9 @@ export const api = {
     request<any>('/api/subscriptions/upgrade', { method: 'POST', body: JSON.stringify({ planId, transactionRef }) }),
   getUsers: () => request<any>('/api/users'),
   createUser: (data: any) => request<any>('/api/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateUser: (id: string, data: any) => request<any>(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   updateUserStatus: (id: string, isActive: boolean) =>
     request<any>(`/api/users/${id}/status`, { method: 'PUT', body: JSON.stringify({ isActive }) }),
+  deleteUser: (id: string) => request<any>(`/api/users/${id}`, { method: 'DELETE' }),
   getRoles: () => request<any>('/api/roles'),
 };
