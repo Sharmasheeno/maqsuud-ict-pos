@@ -1,0 +1,73 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #f8faf9;
+    color: #0f172a;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+
+  html.dark body {
+    background-color: #070b09;
+    color: #f1f5f9;
+  }
+}
+
+/* Subtle circuit pattern & custom scrollbars */
+.maqsuud-circuit-grid,
+.bg-circuit-grid {
+  background-image: 
+    radial-gradient(circle at 1px 1px, rgba(16, 185, 129, 0.16) 1px, transparent 0),
+    linear-gradient(to right, rgba(16, 185, 129, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(16, 185, 129, 0.05) 1px, transparent 1px);
+  background-size: 28px 28px, 56px 56px, 56px 56px;
+}
+
+/* Perforated thermal receipt edge effect */
+.thermal-receipt-edge {
+  background-image: radial-gradient(circle at 6px 0, transparent 4px, currentColor 4.5px);
+  background-size: 12px 6px;
+}
+
+@keyframes scanLaser {
+  0%, 100% {
+    top: 8%;
+    opacity: 0.85;
+  }
+  50% {
+    top: 88%;
+    opacity: 1;
+  }
+}
+
+.animate-scan-laser {
+  animation: scanLaser 2.4s ease-in-out infinite;
+}
+
+/* Custom sleek scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(16, 185, 129, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.45);
+}
