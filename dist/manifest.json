@@ -1,0 +1,17 @@
+{
+  "name": "Maqsuud ICT — Smart POS & Enterprise Management",
+  "short_name": "Maqsuud ICT POS",
+  "description": "Next-Gen ICT & Retail Intelligence with QR Code Scanning, POS Checkout, Invoices, Customer & Supplier Debts, Ledgers, Purchases, Inventory, COGS & Financial Reports.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070b09",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
