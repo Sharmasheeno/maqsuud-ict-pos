@@ -49,6 +49,7 @@ export const POSPage: React.FC = () => {
   const [completedInvoice, setCompletedInvoice] = useState<any | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false);
   const [showCameraModal, setShowCameraModal] = useState<boolean>(false);
+  const [mobilePane, setMobilePane] = useState<'products' | 'cart'>('products');
 
   // Barcode / QR hardware scanner buffer
   const [barcodeInput, setBarcodeInput] = useState<string>('');
@@ -311,9 +312,27 @@ export const POSPage: React.FC = () => {
   ];
 
   return (
-    <div className="h-[calc(100vh-6.5rem)] flex flex-col lg:flex-row gap-4 overflow-hidden">
+    <div className="min-w-0 flex flex-col gap-3 lg:h-[calc(100vh-6.5rem)] lg:flex-row lg:gap-4 lg:overflow-hidden">
+      <div className="grid grid-cols-2 gap-2 lg:hidden" role="group" aria-label="Point of sale sections">
+        <button
+          type="button"
+          aria-pressed={mobilePane === 'products'}
+          onClick={() => setMobilePane('products')}
+          className={`min-h-11 rounded-xl px-3 py-2 text-sm font-bold transition-colors ${mobilePane === 'products' ? 'bg-emerald-600 text-white' : 'border border-emerald-950/10 bg-white text-slate-700 dark:border-white/10 dark:bg-[#111915] dark:text-slate-200'}`}
+        >
+          Products
+        </button>
+        <button
+          type="button"
+          aria-pressed={mobilePane === 'cart'}
+          onClick={() => setMobilePane('cart')}
+          className={`min-h-11 rounded-xl px-3 py-2 text-sm font-bold transition-colors ${mobilePane === 'cart' ? 'bg-emerald-600 text-white' : 'border border-emerald-950/10 bg-white text-slate-700 dark:border-white/10 dark:bg-[#111915] dark:text-slate-200'}`}
+        >
+          Cart · {cart.reduce((s, i) => s + i.quantity, 0)}
+        </button>
+      </div>
       {/* LEFT SECTION: Hardware POS Shelf & Product Catalog with Photos */}
-      <div className="flex-1 flex flex-col bg-white dark:bg-[#111915] rounded-2xl border border-emerald-950/10 dark:border-white/10 shadow-xs overflow-hidden">
+      <div className={`${mobilePane === 'products' ? 'flex' : 'hidden'} h-[min(68dvh,42rem)] min-h-[22rem] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-emerald-950/10 bg-white shadow-xs dark:border-white/10 dark:bg-[#111915] lg:flex lg:h-auto`}>
         {/* Shelf Header & Barcode / Search bar */}
         <div className="p-3.5 border-b border-emerald-950/8 dark:border-white/8 space-y-3 bg-[#f8faf9] dark:bg-[#0b110e]">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -482,7 +501,7 @@ export const POSPage: React.FC = () => {
       </div>
 
       {/* RIGHT SECTION: Simplified Somali Retail POS Cart & Checkout */}
-      <div className="w-full lg:w-[445px] flex flex-col bg-white dark:bg-[#111915] rounded-2xl border border-emerald-950/10 dark:border-white/10 shadow-md overflow-hidden">
+      <div className={`${mobilePane === 'cart' ? 'flex' : 'hidden'} min-h-[min(72dvh,48rem)] w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-emerald-950/10 bg-white shadow-md dark:border-white/10 dark:bg-[#111915] lg:flex lg:h-auto lg:min-h-0 lg:w-[445px] lg:flex-shrink-0`}>
         {/* Cart Header */}
         <div className="p-3 border-b border-emerald-950/8 dark:border-white/8 flex items-center justify-between bg-[#f8faf9] dark:bg-[#0b110e]">
           <div className="flex items-center gap-2">
@@ -576,7 +595,7 @@ export const POSPage: React.FC = () => {
         </div>
 
         {/* Animated Cart Items List with Product Photo Thumbnails */}
-        <div className="flex-1 overflow-y-auto p-2.5 space-y-2 scrollbar-thin">
+        <div className="max-h-[32dvh] min-h-24 flex-1 overflow-y-auto p-2.5 space-y-2 scrollbar-thin lg:max-h-none">
           {cart.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-slate-400 text-xs">
               <ShoppingCart className="w-8 h-8 text-emerald-500/40 stroke-1.5 mb-2" />
@@ -662,8 +681,8 @@ export const POSPage: React.FC = () => {
         {/* Simplified Tax, Discount, Clear Financial Summary & Somali Payment Methods */}
         <div className="p-3 border-t border-emerald-950/10 dark:border-white/10 bg-[#f8faf9] dark:bg-[#0b110e] space-y-2.5">
           {/* Single Tax Toggle (Tax / Canshuur) & Discount (Qiimo Dhimis) */}
-          <div className="flex items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-1.5">
+          <div className="flex flex-col items-stretch justify-between gap-2 text-xs sm:flex-row sm:items-center">
+            <div className="flex items-center justify-between gap-1.5 sm:justify-start">
               <label className="flex items-center gap-1.5 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -692,8 +711,9 @@ export const POSPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 font-bold text-[11px]">Discount (Qiimo Dhimis):</span>
+              <label htmlFor="pos-discount" className="text-slate-500 font-bold text-[11px]">Discount (Qiimo Dhimis):</label>
               <input
+                id="pos-discount"
                 type="number"
                 min="0"
                 step="0.01"

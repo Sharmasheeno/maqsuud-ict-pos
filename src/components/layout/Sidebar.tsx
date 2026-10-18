@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard,
@@ -68,6 +68,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     activePage.startsWith('reports-')
   );
 
+  useEffect(() => {
+    if (!isMobileOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsMobileOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isMobileOpen, setIsMobileOpen]);
+
   const toggleGroup = (key: string) => {
     setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -120,7 +129,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'users-roles', label: t('usersRoles'), icon: ShieldCheck, requiredRole: 'admin' },
     { id: 'plans', label: t('choosePlan'), icon: Sparkles, badge: 'PRO' },
     { id: 'settings', label: t('settings'), icon: Settings },
-  ];
+  ].filter((item) => !item.requiredRole || user?.role?.toLowerCase() === item.requiredRole);
 
   const handleNav = (id: string) => {
     setActivePage(id);
@@ -179,8 +188,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 flex flex-col bg-white/95 dark:bg-[#0d1310]/95 backdrop-blur-xl border-r border-emerald-950/10 dark:border-white/8 transition-all duration-300 ease-in-out ${
-          isMobileOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0'
+        role={isMobileOpen ? 'dialog' : undefined}
+        aria-label="Main navigation"
+        aria-modal={isMobileOpen ? true : undefined}
+        className={`fixed inset-y-0 left-0 z-50 flex w-[min(18rem,calc(100vw-2rem))] flex-col bg-white/95 dark:bg-[#0d1310]/95 backdrop-blur-xl border-r border-emerald-950/10 dark:border-white/8 transition-all duration-300 ease-in-out ${
+          isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         } ${isCollapsed ? 'lg:w-20' : 'lg:w-72'}`}
       >
         {/* Top Accent Dual-Tone Strip */}
