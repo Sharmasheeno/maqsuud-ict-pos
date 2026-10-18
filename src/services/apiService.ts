@@ -5,7 +5,7 @@ const OFFLINE_QUEUE_KEY = 'maqsuud_ict_offline_queue';
 const apiBaseUrl = (
   import.meta.env.VITE_API_BASE_URL ||
   (window as Window & { huggingface?: { variables?: Record<string, string> } }).huggingface?.variables?.API_BASE_URL ||
-  'https://maqsuud-ict-pos-api.onrender.com'
+  'https://maqsuud-ict-pos-api-proxy.sharmacadenuur2017.workers.dev'
 ).replace(/\/+$/, '');
 
 export function getStoredToken(): string | null {
