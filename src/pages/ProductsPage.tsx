@@ -704,30 +704,36 @@ export const ProductsPage: React.FC = () => {
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Current Stock *
+                      Current Quantity in Stock *
                     </label>
                     <input
                       type="number"
+                      min="0"
+                      step="1"
                       required
                       value={formData.stock}
                       onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
                       placeholder="0"
                       className="w-full px-3.5 py-2 bg-slate-50 dark:bg-black/40 border border-emerald-950/10 dark:border-white/10 rounded-xl text-xs sm:text-sm font-mono"
                     />
+                    <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">How many of this product you have on hand right now.</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Min Stock Threshold
+                      Low Stock Alert At
                     </label>
                     <input
                       type="number"
+                      min="0"
+                      step="1"
                       value={formData.minStock}
                       onChange={(e) => setFormData({ ...formData, minStock: e.target.value })}
                       className="w-full px-3.5 py-2 bg-slate-50 dark:bg-black/40 border border-emerald-950/10 dark:border-white/10 rounded-xl text-xs sm:text-sm font-mono"
                     />
+                    <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">Show a low-stock warning when quantity reaches this number.</p>
                   </div>
 
                   <div>
@@ -736,11 +742,18 @@ export const ProductsPage: React.FC = () => {
                     </label>
                     <input
                       type="text"
+                      list="product-unit-options"
                       value={formData.unit}
                       onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                      placeholder="pcs / kg / can"
+                      placeholder="Choose or type a unit"
                       className="w-full px-3.5 py-2 bg-slate-50 dark:bg-black/40 border border-emerald-950/10 dark:border-white/10 rounded-xl text-xs sm:text-sm"
                     />
+                    <datalist id="product-unit-options">
+                      {['pcs', 'unit', 'box', 'pack', 'set', 'pair', 'bottle', 'can', 'bag', 'carton', 'dozen', 'kg', 'g', 'litre', 'ml', 'metre', 'cm', 'roll'].map((unit) => (
+                        <option key={unit} value={unit} />
+                      ))}
+                    </datalist>
+                    <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">Pick a suggestion or type your own unit.</p>
                   </div>
 
                   <div>

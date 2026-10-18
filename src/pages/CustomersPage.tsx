@@ -17,6 +17,7 @@ import { exportCustomerProfilePDF, exportToExcel } from '../utils/exportUtils';
 
 export const CustomersPage: React.FC = () => {
   const { formatCurrency, business, addToast, user } = useApp();
+  const canDeleteCustomers = String(user?.role || '').trim().toLowerCase() === 'admin';
 
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -224,7 +225,7 @@ export const CustomersPage: React.FC = () => {
                 <th className="py-3.5 px-4 text-right">Total Credit</th>
                 <th className="py-3.5 px-4 text-right">Total Paid</th>
                 <th className="py-3.5 px-4 text-right">Current Balance</th>
-                <th className="py-3.5 px-4 text-center">Actions</th>
+                <th className="py-3.5 px-4 text-center min-w-[150px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-emerald-950/6 dark:divide-white/6">
@@ -277,8 +278,8 @@ export const CustomersPage: React.FC = () => {
                           {formatCurrency(c.currentBalance)}
                         </span>
                       </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center justify-center gap-1.5">
+                      <td className="py-3 px-4 min-w-[150px]">
+                        <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                           <button
                             onClick={() => handleViewCustomer(c.id)}
                             title="View Profile & Ledger"
@@ -303,15 +304,15 @@ export const CustomersPage: React.FC = () => {
                             <Edit className="w-3.5 h-3.5" />
                           </button>
 
-                          {user?.role?.toLowerCase() === 'admin' && (
+                          {canDeleteCustomers && (
                             <button
                               onClick={() => handleDeleteCustomer(c)}
                               disabled={deletingCustomerId === c.id}
                               title="Delete customer and linked history"
                               aria-label={`Delete ${c.name} and linked records`}
-                              className="p-1.5 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-500/10 disabled:opacity-50 disabled:cursor-wait"
+                              className="p-2 text-rose-600 hover:text-rose-700 rounded-lg hover:bg-rose-500/10 disabled:opacity-50 disabled:cursor-wait shrink-0"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           )}
                         </div>
