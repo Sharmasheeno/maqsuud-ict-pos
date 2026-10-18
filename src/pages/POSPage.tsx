@@ -25,6 +25,17 @@ import { BarcodeCameraModal } from '../components/common/BarcodeCameraModal';
 const DEFAULT_FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=600&q=80';
 
+const sanitizeDecimalInput = (value: string) => {
+  const normalized = value.replace(/,/g, '.').replace(/[^\d.]/g, '');
+  const [integer = '', ...fraction] = normalized.split('.');
+  return fraction.length > 0 ? `${integer || '0'}.${fraction.join('')}` : integer;
+};
+
+const parseDecimalInput = (value: string) => {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+};
+
 export const POSPage: React.FC = () => {
   const { formatCurrency, business, addToast, setActivePage, pendingPOSProduct, setPendingPOSProduct } = useApp();
 
@@ -40,9 +51,9 @@ export const POSPage: React.FC = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
   const [saleType, setSaleType] = useState<'CASH' | 'CREDIT'>('CASH');
   const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
-  const [discountAmount, setDiscountAmount] = useState<number>(0);
+  const [discountAmountInput, setDiscountAmountInput] = useState<string>('');
   const [taxEnabled, setTaxEnabled] = useState<boolean>(false);
-  const [customTaxRate, setCustomTaxRate] = useState<number>(business?.taxRate || 5);
+  const [customTaxRateInput, setCustomTaxRateInput] = useState<string>(String(business?.taxRate ?? 5));
   const [recordedAmountInput, setRecordedAmountInput] = useState<string>('');
   const [isCustomRecordedAmount, setIsCustomRecordedAmount] = useState<boolean>(false);
   const [checkoutLoading, setCheckoutLoading] = useState<boolean>(false);
@@ -61,7 +72,7 @@ export const POSPage: React.FC = () => {
 
   useEffect(() => {
     if (business?.taxRate !== undefined) {
-      setCustomTaxRate(business.taxRate);
+      setCustomTaxRateInput(String(business.taxRate));
     }
   }, [business?.taxRate]);
 
@@ -215,10 +226,10 @@ export const POSPage: React.FC = () => {
     cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0).toFixed(2)
   );
   // 2. Discount: - $X.XX
-  const validDiscount = Math.min(subtotal, Math.max(0, discountAmount || 0));
+  const validDiscount = Math.min(subtotal, parseDecimalInput(discountAmountInput));
   const taxableAmount = Math.max(0, subtotal - validDiscount);
   // 3. Tax Amount: (Subtotal - Discount) × (taxRate / 100) (only when Tax is enabled)
-  const effectiveTaxRatePct = taxEnabled ? Math.max(0, customTaxRate || 0) : 0;
+  const effectiveTaxRatePct = taxEnabled ? Math.min(100, parseDecimalInput(customTaxRateInput)) : 0;
   const taxTotal = taxEnabled
     ? parseFloat((taxableAmount * (effectiveTaxRatePct / 100)).toFixed(2))
     : 0;
@@ -241,7 +252,7 @@ export const POSPage: React.FC = () => {
       ? saleType === 'CASH'
         ? grandTotal
         : 0
-      : Math.max(0, parseFloat(recordedAmountInput) || 0);
+      : parseDecimalInput(recordedAmountInput);
 
   const isPartialOrCreditDue = recordedAmount < grandTotal - 0.009;
   const dueBalanceRemaining = isPartialOrCreditDue
@@ -290,7 +301,7 @@ export const POSPage: React.FC = () => {
         setCompletedInvoice(res.invoice);
         setShowReceiptModal(true);
         setCart([]);
-        setDiscountAmount(0);
+        setDiscountAmountInput('');
         setIsCustomRecordedAmount(false);
         setRecordedAmountInput('');
         addToast(`Sale ${res.invoice.invoiceNumber} recorded successfully!`, 'success');
@@ -530,7 +541,7 @@ export const POSPage: React.FC = () => {
             <button
               onClick={() => {
                 setCart([]);
-                setDiscountAmount(0);
+                setDiscountAmountInput('');
                 setIsCustomRecordedAmount(false);
               }}
               className="text-xs font-extrabold text-rose-600 hover:text-rose-700 transition-colors cursor-pointer"
@@ -707,12 +718,12 @@ export const POSPage: React.FC = () => {
               {taxEnabled && (
                 <div className="flex items-center gap-0.5">
                   <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.5"
-                    value={customTaxRate}
-                    onChange={(e) => setCustomTaxRate(parseFloat(e.target.value) || 0)}
+                    type="text"
+                    inputMode="decimal"
+                    value={customTaxRateInput}
+                    onChange={(e) => setCustomTaxRateInput(sanitizeDecimalInput(e.target.value))}
+                    aria-label="Tax rate percentage"
+                    autoComplete="off"
                     className="w-12 px-1.5 py-0.5 bg-white dark:bg-[#141e19] border border-emerald-500/40 rounded text-center font-mono text-xs font-extrabold text-emerald-700 dark:text-emerald-300"
                   />
                   <span className="text-[11px] font-mono font-bold text-slate-500">%</span>
@@ -724,12 +735,15 @@ export const POSPage: React.FC = () => {
               <label htmlFor="pos-discount" className="text-slate-500 font-bold text-[11px]">Discount (Qiimo Dhimis):</label>
               <input
                 id="pos-discount"
-                type="number"
-                min="0"
-                step="0.01"
-                value={discountAmount || ''}
-                onChange={(e) => setDiscountAmount(parseFloat(e.target.value) || 0)}
+                type="text"
+                inputMode="decimal"
+                value={discountAmountInput}
+                onChange={(e) => setDiscountAmountInput(sanitizeDecimalInput(e.target.value))}
                 placeholder="0.00"
+                aria-label="Discount amount"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 className="w-18 px-2 py-0.5 bg-white dark:bg-[#141e19] border border-emerald-950/15 dark:border-white/15 rounded-lg text-right font-mono text-xs font-bold"
               />
             </div>
@@ -795,15 +809,16 @@ export const POSPage: React.FC = () => {
                 Recorded Amount (Lacagta La Qabtay)
               </label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={recordedAmountInput}
                 onChange={(e) => {
                   setIsCustomRecordedAmount(true);
-                  setRecordedAmountInput(e.target.value);
+                  setRecordedAmountInput(sanitizeDecimalInput(e.target.value));
                 }}
                 placeholder={grandTotal.toFixed(2)}
+                aria-label="Recorded payment amount"
+                autoComplete="off"
                 className="w-full px-2.5 py-1.5 bg-white dark:bg-[#141e19] border border-emerald-500/35 rounded-xl text-xs font-mono font-extrabold text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
               />
             </div>
