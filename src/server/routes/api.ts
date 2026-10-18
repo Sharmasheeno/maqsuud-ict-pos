@@ -41,6 +41,17 @@ function requireAdmin(req: Request, res: Response): boolean {
   return true;
 }
 
+function invoiceItemRevenueAfterInvoiceDiscount(invoice: IInvoice, item: IInvoice['items'][number]): number {
+  const lineRevenue = Math.max(0, Number(item.total) || 0);
+  const invoiceLinesRevenue = invoice.items.reduce(
+    (sum, line) => sum + Math.max(0, Number(line.total) || 0),
+    0
+  );
+  const invoiceDiscount = Math.min(invoiceLinesRevenue, Math.max(0, Number(invoice.discountTotal) || 0));
+  const allocatedDiscount = invoiceLinesRevenue > 0 ? invoiceDiscount * (lineRevenue / invoiceLinesRevenue) : 0;
+  return Math.max(0, lineRevenue - allocatedDiscount);
+}
+
 // ----------------------------------------------------
 // 1. AUTH & USER PROFILE ENDPOINTS
 // ----------------------------------------------------
@@ -222,9 +233,12 @@ router.post('/auth/deactivate', (req, res) => {
 router.get('/dashboard', (req, res) => {
   const db = dbStore.get();
   const todayStr = new Date().toISOString().split('T')[0];
+  const allowedPeriods = ['day', 'week', 'month', 'year'];
+  const period = allowedPeriods.includes(String(req.query.period)) ? String(req.query.period) : 'week';
 
   // Calculate totals from actual document collections
-  const totalSales = db.invoices.reduce((sum, inv) => sum + (inv.grandTotal || 0), 0);
+  const activeInvoices = db.invoices.filter((invoice) => !invoice.isRefunded);
+  const totalSales = activeInvoices.reduce((sum, inv) => sum + (inv.grandTotal || 0), 0);
   const totalPurchases = db.purchases.reduce((sum, po) => sum + (po.totalCost || 0), 0);
   const totalUsers = db.users.filter((u) => u.isActive).length;
   const totalCustomers = db.customers.filter((c) => !c.isArchived).length;
@@ -242,62 +256,80 @@ router.get('/dashboard', (req, res) => {
   const totalInventoryValue = db.products.reduce((sum, p) => sum + (!p.isArchived ? (p.purchaseCost * p.stock) : 0), 0);
 
   // Today's Revenue and Profit
-  const todayInvoices = db.invoices.filter((inv) => inv.date && inv.date.startsWith(todayStr));
+  const todayInvoices = activeInvoices.filter((inv) => inv.date && inv.date.startsWith(todayStr));
   const todayRevenue = todayInvoices.reduce((sum, inv) => sum + (inv.grandTotal || 0), 0);
 
-  // Today profit = (sellingPrice - purchaseCost) for items sold today
+  // Profit uses each invoice line after allocating invoice-level discounts.
   let todayProfit = 0;
   todayInvoices.forEach((inv) => {
     inv.items.forEach((item) => {
-      todayProfit += (item.unitPrice - item.unitCost) * item.quantity - (item.discount || 0);
+      todayProfit += invoiceItemRevenueAfterInvoiceDiscount(inv, item) - item.unitCost * item.quantity;
     });
   });
 
-  // Calculate Sales by Last 7 Days for chart
-  const salesByDay: { [day: string]: { sales: number; profit: number; count: number } } = {};
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().split('T')[0];
-    salesByDay[key] = { sales: 0, profit: 0, count: 0 };
+  // Build real hourly, daily, or monthly buckets for the selected chart period.
+  const bucketCount = period === 'day' ? 24 : period === 'week' ? 7 : period === 'month' ? 30 : 12;
+  const firstBucket = new Date();
+  if (period === 'day') {
+    firstBucket.setUTCMinutes(0, 0, 0);
+    firstBucket.setUTCHours(firstBucket.getUTCHours() - (bucketCount - 1));
+  } else if (period === 'year') {
+    firstBucket.setUTCDate(1);
+    firstBucket.setUTCHours(0, 0, 0, 0);
+    firstBucket.setUTCMonth(firstBucket.getUTCMonth() - (bucketCount - 1));
+  } else {
+    firstBucket.setUTCHours(0, 0, 0, 0);
+    firstBucket.setUTCDate(firstBucket.getUTCDate() - (bucketCount - 1));
   }
 
-  db.invoices.forEach((inv) => {
-    const dateKey = (inv.date || '').split('T')[0];
-    if (salesByDay[dateKey]) {
-      salesByDay[dateKey].sales += inv.grandTotal;
-      salesByDay[dateKey].count += 1;
-      let p = 0;
-      inv.items.forEach((item) => {
-        p += (item.unitPrice - item.unitCost) * item.quantity;
-      });
-      salesByDay[dateKey].profit += p;
-    }
-  });
+  const salesByPeriod: Record<string, { date: string; rawDate: string; sales: number; profit: number; count: number }> = {};
+  const keyForDate = (date: Date) =>
+    period === 'day' ? date.toISOString().slice(0, 13) : period === 'year' ? date.toISOString().slice(0, 7) : date.toISOString().slice(0, 10);
 
-  const salesTrend = Object.keys(salesByDay).map((date) => {
-    const d = new Date(date);
-    const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    return {
-      date: label,
-      rawDate: date,
-      sales: Number(salesByDay[date].sales.toFixed(2)),
-      profit: Number(salesByDay[date].profit.toFixed(2)),
-      orders: salesByDay[date].count,
-    };
-  });
+  for (let index = 0; index < bucketCount; index += 1) {
+    const bucketDate = new Date(firstBucket);
+    if (period === 'day') bucketDate.setUTCHours(bucketDate.getUTCHours() + index);
+    else if (period === 'year') bucketDate.setUTCMonth(bucketDate.getUTCMonth() + index);
+    else bucketDate.setUTCDate(bucketDate.getUTCDate() + index);
+    const rawDate = keyForDate(bucketDate);
+    const date = period === 'day'
+      ? bucketDate.toLocaleTimeString('en-US', { hour: 'numeric', timeZone: 'UTC' })
+      : period === 'year'
+        ? bucketDate.toLocaleDateString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' })
+        : bucketDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+    salesByPeriod[rawDate] = { date, rawDate, sales: 0, profit: 0, count: 0 };
+  }
 
-  // Best-selling products
+  // Best-selling products in the selected period, excluding refunded sales.
   const productSalesMap: { [id: string]: { name: string; quantity: number; revenue: number } } = {};
-  db.invoices.forEach((inv) => {
+  activeInvoices.forEach((inv) => {
+    const dateKey = typeof inv.date === 'string'
+      ? period === 'day' ? inv.date.slice(0, 13) : period === 'year' ? inv.date.slice(0, 7) : inv.date.slice(0, 10)
+      : '';
+    const bucket = salesByPeriod[dateKey];
+    if (!bucket) return;
+    const profit = inv.items.reduce(
+      (sum, item) => sum + invoiceItemRevenueAfterInvoiceDiscount(inv, item) - item.unitCost * item.quantity,
+      0
+    );
+    bucket.sales += inv.grandTotal || 0;
+    bucket.profit += profit;
+    bucket.count += 1;
+
     inv.items.forEach((item) => {
       if (!productSalesMap[item.productId]) {
         productSalesMap[item.productId] = { name: item.name, quantity: 0, revenue: 0 };
       }
       productSalesMap[item.productId].quantity += item.quantity;
-      productSalesMap[item.productId].revenue += item.total;
+      productSalesMap[item.productId].revenue += invoiceItemRevenueAfterInvoiceDiscount(inv, item);
     });
   });
+
+  const salesTrend = Object.values(salesByPeriod).map((bucket) => ({
+    ...bucket,
+    sales: Number(bucket.sales.toFixed(2)),
+    profit: Number(bucket.profit.toFixed(2)),
+  }));
 
   const bestSellingProducts = Object.values(productSalesMap)
     .sort((a, b) => b.quantity - a.quantity)
@@ -332,6 +364,7 @@ router.get('/dashboard', (req, res) => {
       totalInventoryValue: Number(totalInventoryValue.toFixed(2)),
       todayRevenue: Number(todayRevenue.toFixed(2)),
       todayProfit: Number(todayProfit.toFixed(2)),
+      todayInvoiceCount: todayInvoices.length,
       currency: db.business.currency,
       currencySymbol: db.business.currencySymbol,
     },
@@ -534,12 +567,17 @@ router.put('/products/:id', (req, res) => {
 
 router.delete('/products/:id', (req, res) => {
   const { id } = req.params;
+  let archived = false;
   dbStore.update((d) => {
     const p = d.products.find((item) => item.id === id);
-    if (p) {
+    if (p && !p.isArchived) {
       p.isArchived = true;
+      archived = true;
     }
   });
+  if (!archived) {
+    return res.status(404).json({ success: false, message: 'Product not found or already archived.' });
+  }
   return res.json({ success: true, message: 'Product archived successfully' });
 });
 
@@ -1691,19 +1729,20 @@ router.get('/reports/sales', (req, res) => {
     invoices = invoices.filter((i) => i.cashierId === cashierId);
   }
 
-  const totalSales = invoices.reduce((s, i) => s + i.grandTotal, 0);
-  const totalDiscounts = invoices.reduce((s, i) => s + (i.discountTotal || 0), 0);
-  const totalReceived = invoices.reduce((s, i) => s + i.amountPaid, 0);
-  const totalBalanceDue = invoices.reduce((s, i) => s + i.balanceDue, 0);
-  const totalTax = invoices.reduce((s, i) => s + (i.taxTotal || 0), 0);
-  const totalInsurance = invoices.reduce((s, i) => s + (i.insuranceTotal || 0), 0);
+  const activeInvoices = invoices.filter((invoice) => !invoice.isRefunded);
+  const totalSales = activeInvoices.reduce((s, i) => s + i.grandTotal, 0);
+  const totalDiscounts = activeInvoices.reduce((s, i) => s + (i.discountTotal || 0), 0);
+  const totalReceived = activeInvoices.reduce((s, i) => s + i.amountPaid, 0);
+  const totalBalanceDue = activeInvoices.reduce((s, i) => s + i.balanceDue, 0);
+  const totalTax = activeInvoices.reduce((s, i) => s + (i.taxTotal || 0), 0);
+  const totalInsurance = activeInvoices.reduce((s, i) => s + (i.insuranceTotal || 0), 0);
   const refundedCount = invoices.filter((i) => i.isRefunded).length;
 
   return res.json({
     success: true,
     data: invoices,
     summary: {
-      count: invoices.length,
+      count: activeInvoices.length,
       totalSales: Number(totalSales.toFixed(2)),
       totalDiscounts: Number(totalDiscounts.toFixed(2)),
       totalReceived: Number(totalReceived.toFixed(2)),
@@ -1812,6 +1851,7 @@ router.get('/reports/cogs', (req, res) => {
 
   invoices.forEach((inv) => {
     inv.items.forEach((item) => {
+      const netRevenue = invoiceItemRevenueAfterInvoiceDiscount(inv, item);
       if (!cogsMap[item.productId]) {
         cogsMap[item.productId] = {
           productId: item.productId,
@@ -1829,14 +1869,14 @@ router.get('/reports/cogs', (req, res) => {
       const itemCost = item.unitCost * item.quantity;
       cogsMap[item.productId].quantitySold += item.quantity;
       cogsMap[item.productId].totalCOGS += itemCost;
-      cogsMap[item.productId].revenue += item.total;
+      cogsMap[item.productId].revenue += netRevenue;
       cogsMap[item.productId].grossProfit = cogsMap[item.productId].revenue - cogsMap[item.productId].totalCOGS;
       cogsMap[item.productId].grossMargin = cogsMap[item.productId].revenue > 0
         ? (cogsMap[item.productId].grossProfit / cogsMap[item.productId].revenue) * 100
         : 0;
 
       totalCOGS += itemCost;
-      totalRevenue += item.total;
+      totalRevenue += netRevenue;
     });
   });
 

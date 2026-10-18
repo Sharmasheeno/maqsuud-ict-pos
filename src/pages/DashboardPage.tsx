@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   TrendingUp,
@@ -35,25 +35,50 @@ export const DashboardPage: React.FC = () => {
   const { formatCurrency, t, setActivePage, user, theme } = useApp();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshError, setRefreshError] = useState('');
   const [timeFilter, setTimeFilter] = useState<'day' | 'week' | 'month' | 'year'>('week');
+  const requestSequence = useRef(0);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
+    const sequence = ++requestSequence.current;
     setLoading(true);
     try {
-      const res = await api.getDashboardMetrics();
+      const res = await api.getDashboardMetrics(timeFilter);
       if (res.success) {
-        setData(res);
+        if (sequence === requestSequence.current) {
+          setData(res);
+          setRefreshError('');
+        }
+      } else {
+        throw new Error(res.message || 'Dashboard refresh failed.');
       }
     } catch (err) {
       console.error('Failed to fetch dashboard metrics:', err);
+      if (sequence === requestSequence.current) {
+        setRefreshError('Could not refresh dashboard data. Check the connection and retry.');
+      }
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) setLoading(false);
     }
-  };
+  }, [timeFilter]);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    void fetchDashboardData();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void fetchDashboardData();
+    };
+    const interval = window.setInterval(refreshWhenVisible, 30_000);
+    window.addEventListener('focus', refreshWhenVisible);
+    window.addEventListener('maqsuud:data-changed', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      requestSequence.current += 1;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshWhenVisible);
+      window.removeEventListener('maqsuud:data-changed', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [fetchDashboardData]);
 
   if (loading && !data) {
     return (
@@ -207,10 +232,12 @@ export const DashboardPage: React.FC = () => {
 
         <div className="flex items-center gap-2">
           <div className="bg-white dark:bg-[#111915] border border-emerald-950/10 dark:border-white/10 p-1 rounded-xl flex items-center text-xs font-bold">
+            <span className="px-2 text-[10px] text-slate-500">Chart period</span>
             {(['day', 'week', 'month', 'year'] as const).map((period) => (
               <button
                 key={period}
                 onClick={() => setTimeFilter(period)}
+                aria-pressed={timeFilter === period}
                 className={`px-3 py-1.5 rounded-lg capitalize transition-all ${
                   timeFilter === period
                     ? 'bg-linear-to-r from-[#059669] to-[#16a34a] text-white shadow-xs'
@@ -233,6 +260,12 @@ export const DashboardPage: React.FC = () => {
           </motion.button>
         </div>
       </motion.div>
+
+      {refreshError && (
+        <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold text-amber-800 dark:text-amber-300">
+          {refreshError} Showing the last successful snapshot when available.
+        </div>
+      )}
 
       {/* Primary KPI Grid (4 Layered Enterprise Cards with Sparklines) */}
       <motion.div
@@ -260,17 +293,8 @@ export const DashboardPage: React.FC = () => {
           </div>
           <div className="mt-3 flex items-center justify-between">
             <span className="px-2 py-0.5 rounded-md bg-emerald-500/12 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold">
-              +14.8% Live POS
+              {metrics.todayInvoiceCount || 0} transactions today
             </span>
-            <svg className="w-16 h-6 text-emerald-500" viewBox="0 0 64 24" fill="none">
-              <path
-                d="M2 20 L14 14 L26 17 L38 8 L50 11 L62 3"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
           </div>
         </motion.div>
 
@@ -295,16 +319,8 @@ export const DashboardPage: React.FC = () => {
           </div>
           <div className="mt-3 flex items-center justify-between">
             <span className="px-2 py-0.5 rounded-md bg-lime-500/15 text-lime-700 dark:text-lime-300 text-[10px] font-bold">
-              Net of COGS
+              Calculated from today's invoices
             </span>
-            <svg className="w-16 h-6 text-lime-500" viewBox="0 0 64 24" fill="none">
-              <path
-                d="M2 18 L16 15 L28 10 L42 12 L54 5 L62 2"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-              />
-            </svg>
           </div>
         </motion.div>
 

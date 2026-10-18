@@ -17,6 +17,10 @@ export function setStoredToken(token: string | null): void {
     localStorage.setItem(TOKEN_KEY, token);
   } else {
     localStorage.removeItem(TOKEN_KEY);
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (key?.startsWith('offline_cache_')) localStorage.removeItem(key);
+    }
   }
 }
 
@@ -43,20 +47,29 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     }
 
     // Cache successful GET results for offline resilience
-    if (!options.method || options.method === 'GET') {
+    const method = (options.method || 'GET').toUpperCase();
+    if (method === 'GET') {
       try {
         localStorage.setItem(`offline_cache_${endpoint}`, JSON.stringify(data));
       } catch (e) {
         // quota exceeded ignore
       }
+    } else {
+      // Mutations can affect several screens (e.g. checkout changes sales,
+      // stock, customer balances, dashboard metrics, and reports).
+      for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+        const key = localStorage.key(index);
+        if (key?.startsWith('offline_cache_')) localStorage.removeItem(key);
+      }
+      window.dispatchEvent(new CustomEvent('maqsuud:data-changed', { detail: { endpoint } }));
     }
 
     return data;
   } catch (err: any) {
     // If network error / offline, check offline cache
-    if (!options.method || options.method === 'GET') {
+    if (!options.method || options.method.toUpperCase() === 'GET') {
       const cached = localStorage.getItem(`offline_cache_${endpoint}`);
-      if (cached) {
+      if (cached && !navigator.onLine) {
         console.warn(`[Offline Mode] Using cached data for ${endpoint}`);
         return JSON.parse(cached);
       }
@@ -80,7 +93,8 @@ export const api = {
     request<any>('/api/auth/deactivate', { method: 'POST', body: JSON.stringify(data) }),
 
   // Dashboard
-  getDashboardMetrics: () => request<any>('/api/dashboard'),
+  getDashboardMetrics: (period: 'day' | 'week' | 'month' | 'year' = 'week') =>
+    request<any>(`/api/dashboard?period=${period}`),
 
   // Products & QR
   getProducts: (search?: string, category?: string) => {

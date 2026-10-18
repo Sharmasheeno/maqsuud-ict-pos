@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   BarChart3,
   TrendingUp,
@@ -8,6 +8,7 @@ import {
   FileText,
   Search,
   Calendar,
+  RefreshCw,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useApp } from '../context/AppContext';
@@ -28,65 +29,71 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ initialReport = 'sales
   const [data, setData] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>({});
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string>('');
   const [search, setSearch] = useState<string>('');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  const requestSequence = useRef(0);
+
+  const loadReportData = useCallback(async () => {
+    const sequence = ++requestSequence.current;
+    setLoading(true);
+    setLoadError('');
+    try {
+      const filters = { startDate, endDate };
+      let res: any;
+      if (activeReport === 'sales') {
+        res = await api.getSalesReport(filters);
+      } else if (activeReport === 'purchases') {
+        res = await api.getPurchaseReport(filters);
+      } else if (activeReport === 'inventory') {
+        res = await api.getInventoryReport();
+      } else if (activeReport === 'cogs') {
+        res = await api.getCOGSReport(filters);
+      } else if (activeReport === 'customers') {
+        res = await api.getCustomerBalanceReport();
+      } else {
+        res = await api.getSupplierBalanceReport();
+      }
+
+      if (!res?.success) throw new Error(res?.message || 'Report data could not be loaded.');
+      if (sequence === requestSequence.current) {
+        setData(Array.isArray(res.data) ? res.data : []);
+        setSummary(res.summary || {});
+      }
+    } catch (err: any) {
+      console.error('Failed to load report data:', err);
+      if (sequence === requestSequence.current) {
+        setData([]);
+        setSummary({});
+        setLoadError(err.message || 'Report data could not be loaded.');
+      }
+    } finally {
+      if (sequence === requestSequence.current) setLoading(false);
+    }
+  }, [activeReport, startDate, endDate]);
 
   useEffect(() => {
     setActiveReport(initialReport);
   }, [initialReport]);
 
   useEffect(() => {
-    loadReportData();
-  }, [activeReport, startDate, endDate]);
-
-  const loadReportData = async () => {
-    setLoading(true);
-    try {
-      const filters = { startDate, endDate };
-      if (activeReport === 'sales') {
-        const res = await api.getSalesReport(filters);
-        if (res.success) {
-          setData(res.data);
-          setSummary(res.summary);
-        }
-      } else if (activeReport === 'purchases') {
-        const res = await api.getPurchaseReport(filters);
-        if (res.success) {
-          setData(res.data);
-          setSummary(res.summary);
-        }
-      } else if (activeReport === 'inventory') {
-        const res = await api.getInventoryReport();
-        if (res.success) {
-          setData(res.data);
-          setSummary(res.summary);
-        }
-      } else if (activeReport === 'cogs') {
-        const res = await api.getCOGSReport(filters);
-        if (res.success) {
-          setData(res.data);
-          setSummary(res.summary);
-        }
-      } else if (activeReport === 'customers') {
-        const res = await api.getCustomerBalanceReport();
-        if (res.success) {
-          setData(res.data);
-          setSummary(res.summary);
-        }
-      } else if (activeReport === 'suppliers') {
-        const res = await api.getSupplierBalanceReport();
-        if (res.success) {
-          setData(res.data);
-          setSummary(res.summary);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    void loadReportData();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void loadReportData();
+    };
+    const interval = window.setInterval(refreshWhenVisible, 30_000);
+    window.addEventListener('focus', refreshWhenVisible);
+    window.addEventListener('maqsuud:data-changed', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      requestSequence.current += 1;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshWhenVisible);
+      window.removeEventListener('maqsuud:data-changed', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [loadReportData]);
 
   // Filtered view by search term
   const filteredData = data.filter((row) => {
@@ -194,6 +201,15 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ initialReport = 'sales
 
         <div className="flex items-center gap-2">
           <button
+            onClick={() => void loadReportData()}
+            disabled={loading}
+            aria-label="Refresh report data"
+            className="px-3.5 py-2 bg-white dark:bg-[#111915] border border-emerald-950/10 dark:border-white/10 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-bold hover:border-emerald-500/40 flex items-center gap-1.5 shadow-xs transition-all disabled:opacity-60"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+          <button
             onClick={handleExportExcel}
             className="px-3.5 py-2 bg-white dark:bg-[#111915] border border-emerald-950/10 dark:border-white/10 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:border-emerald-500/40 flex items-center gap-1.5 shadow-xs transition-all"
           >
@@ -286,6 +302,13 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ initialReport = 'sales
         </div>
       </div>
 
+      {loadError && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-500/25 bg-rose-500/8 px-4 py-3 text-xs font-semibold text-rose-700 dark:text-rose-300">
+          <span>Report refresh failed: {loadError}</span>
+          <button onClick={() => void loadReportData()} className="font-extrabold underline">Retry</button>
+        </div>
+      )}
+
       {/* Report Summary Metric Cards */}
       {summary && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -313,6 +336,12 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ initialReport = 'sales
                 <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Tax Collected</div>
                 <div className="text-xl font-extrabold text-lime-600 dark:text-lime-400 font-mono mt-1">
                   {formatCurrency(summary.totalTax || 0)}
+                </div>
+              </div>
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#111915] border border-emerald-950/8 dark:border-white/8 shadow-xs">
+                <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Refunded Invoices</div>
+                <div className="text-xl font-extrabold text-rose-600 dark:text-rose-400 font-mono mt-1">
+                  {summary.refundedCount || 0}
                 </div>
               </div>
             </>
@@ -532,7 +561,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ initialReport = 'sales
                         </td>
                         <td className="py-3.5 px-4 text-center">
                           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
-                            {row.paymentStatus}
+                            {row.isRefunded ? 'REFUNDED' : row.paymentStatus}
                           </span>
                         </td>
                       </>
