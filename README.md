@@ -15,6 +15,10 @@ Retail point of sale and shop management app with a React frontend, Express API,
 
 The React frontend runs as a free Hugging Face Static Space. The Express API runs as a Render Node web service. The frontend sends requests to the API using the public `API_BASE_URL` variable configured in the Hugging Face Space.
 
+### Optional Cloudflare front door
+
+`cloudflare/worker.mjs` can serve the Hugging Face static frontend and proxy `/api/*` to Render through the existing `maqsuud-ict-pos-api-proxy` Worker. This provides one shareable Worker URL for both the app and API. Deploy it with `npx wrangler deploy` from this repository after authenticating Wrangler to the Cloudflare account. The API route is not cached; the home page is revalidated against Hugging Face.
+
 ### Hugging Face frontend
 
 Create a **Static** Space and use this repository. Set the Space variable `API_BASE_URL` to the Render API origin, for example `https://maqsuud-ict-pos-api.onrender.com` (without a trailing slash). This URL is public configuration, not a secret. Static Spaces can build React apps with `app_build_command` and `app_file` metadata.
