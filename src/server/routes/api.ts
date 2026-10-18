@@ -157,6 +157,41 @@ router.get('/settings/business', (req, res) => {
 
 router.use(authMiddleware);
 
+router.delete('/admin/store-data', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  if (req.body?.confirmation !== 'DELETE ALL BUSINESS DATA') {
+    return res.status(400).json({ success: false, message: 'Confirmation phrase is required.' });
+  }
+
+  const adminId = (req as any).user.id;
+  dbStore.update((d) => {
+    // Keep the signed-in administrator and configuration so the app remains accessible.
+    d.users = d.users.filter((user) => user.id === adminId);
+    d.customers = [];
+    d.customerLedger = [];
+    d.customerPayments = [];
+    d.suppliers = [];
+    d.supplierLedger = [];
+    d.supplierPayments = [];
+    d.products = [];
+    d.categories = [];
+    d.brands = [];
+    d.invoices = [];
+    d.purchases = [];
+    d.stockMovements = [];
+    d.auditLogs = [];
+  });
+
+  try {
+    await dbStore.flushCloud();
+  } catch (error: any) {
+    console.error('[Admin data reset] TiDB persistence failed:', error?.message || error);
+    return res.status(503).json({ success: false, message: 'The reset could not be confirmed in TiDB Cloud. Contact support before retrying.' });
+  }
+
+  return res.json({ success: true, message: 'Business records cleared.' });
+});
+
 router.put('/auth/profile', (req, res) => {
   const { name, phone } = req.body;
   const id = (req as any).user.id;

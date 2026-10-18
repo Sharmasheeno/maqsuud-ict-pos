@@ -75,6 +75,7 @@ export const SettingsPage: React.FC = () => {
   // Delete Account
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deactivating, setDeactivating] = useState(false);
+  const [clearingBusinessData, setClearingBusinessData] = useState(false);
 
   useEffect(() => {
     if (business) {
@@ -188,6 +189,28 @@ export const SettingsPage: React.FC = () => {
       addToast(err.message || 'Deactivation failed', 'error');
     } finally {
       setDeactivating(false);
+    }
+  };
+
+  const handleClearAllBusinessData = async () => {
+    const isSomali = lang === 'so';
+    const confirmation = window.prompt(
+      isSomali
+        ? 'Tani si joogto ah ayay u tirtiraysaa diiwaannada ganacsiga. Akoonka maamulka iyo dejinta ganacsiga way sii jirayaan. Si aad u xaqiijiso qor: DELETE ALL BUSINESS DATA'
+        : 'This permanently removes business records. Your admin account and business settings remain. Type DELETE ALL BUSINESS DATA to confirm.'
+    );
+    if (confirmation !== 'DELETE ALL BUSINESS DATA') return;
+
+    setClearingBusinessData(true);
+    try {
+      const result = await api.clearAllBusinessData();
+      if (result.success) {
+        addToast(isSomali ? 'Dhammaan diiwaannada ganacsiga waa la tirtiray.' : 'All business records have been cleared.', 'success');
+      }
+    } catch (error: any) {
+      addToast(error.message || (isSomali ? 'Xogta lama tirtiri karin.' : 'Could not clear business data.'), 'error');
+    } finally {
+      setClearingBusinessData(false);
     }
   };
 
@@ -795,6 +818,30 @@ export const SettingsPage: React.FC = () => {
               </div>
             </div>
           )}
+
+          {activeTab === 'support' && user?.role?.toLowerCase() === 'admin' && (
+            <section className="mt-6 rounded-2xl border border-rose-500/30 bg-rose-500/5 p-4 sm:p-5 space-y-2">
+              <h3 className="font-extrabold text-rose-700 dark:text-rose-300">
+                {lang === 'so' ? 'Tirtir dhammaan xogta ganacsiga' : 'Clear all business data'}
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-300">
+                {lang === 'so'
+                  ? 'Waxay tirtiraysaa macaamiisha, alaab-qeybiyeyaasha, badeecadaha, qaansheegyada, wax iibsiga, xisaabaadka, dhaqdhaqaaqa kaydka iyo diiwaannada. Akoonka maamulka iyo dejinta ganacsiga waa la ilaalinayaa.'
+                  : 'Permanently removes customers, suppliers, products, invoices, purchases, ledgers, stock movements, and audit logs. Your admin account and business settings are preserved.'}
+              </p>
+              <button
+                type="button"
+                onClick={handleClearAllBusinessData}
+                disabled={clearingBusinessData}
+                className="mt-2 rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-extrabold text-white hover:bg-rose-700 disabled:opacity-50"
+              >
+                {clearingBusinessData
+                  ? (lang === 'so' ? 'Waa la tirtirayaa...' : 'Clearing...')
+                  : (lang === 'so' ? 'Tirtir xogta oo dhan' : 'Delete all business data')}
+              </button>
+            </section>
+          )}
+
         </div>
       </div>
     </div>

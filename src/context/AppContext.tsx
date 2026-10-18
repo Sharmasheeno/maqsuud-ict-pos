@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { api, setStoredToken, getStoredToken } from '../services/apiService';
 import { translations, Language } from '../locales/translations';
+import { localizeMountedUi } from '../locales/domTranslation';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -140,6 +141,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [lang, setLangState] = useState<Language>(() => {
     return (localStorage.getItem('maqsuud_lang') as Language) || 'en';
   });
+
+  useEffect(() => localizeMountedUi(lang), [lang]);
 
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
     const saved = localStorage.getItem('maqsuud_theme');

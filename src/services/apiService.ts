@@ -196,4 +196,8 @@ export const api = {
     request<any>(`/api/users/${id}/status`, { method: 'PUT', body: JSON.stringify({ isActive }) }),
   deleteUser: (id: string) => request<any>(`/api/users/${id}`, { method: 'DELETE' }),
   getRoles: () => request<any>('/api/roles'),
+  clearAllBusinessData: () => request<any>('/api/admin/store-data', {
+    method: 'DELETE',
+    body: JSON.stringify({ confirmation: 'DELETE ALL BUSINESS DATA' }),
+  }),
 };

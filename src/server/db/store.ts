@@ -1542,6 +1542,17 @@ class DatabaseStore {
     this.save();
     return this.data;
   }
+
+  public async flushCloud(): Promise<void> {
+    if (!this.pool || !this.cloudConnected) {
+      throw new Error('TiDB Cloud is not connected.');
+    }
+    const payloadStr = JSON.stringify(this.data);
+    await this.pool.execute(
+      `INSERT INTO maqsuud_pos_store (id, payload) VALUES ('main_store', ?) ON DUPLICATE KEY UPDATE payload = VALUES(payload)`,
+      [payloadStr]
+    );
+  }
 }
 
 export const dbStore = new DatabaseStore();
