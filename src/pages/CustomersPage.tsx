@@ -225,7 +225,7 @@ export const CustomersPage: React.FC = () => {
                 <th className="py-3.5 px-4 text-right">Total Credit</th>
                 <th className="py-3.5 px-4 text-right">Total Paid</th>
                 <th className="py-3.5 px-4 text-right">Current Balance</th>
-                <th className="py-3.5 px-4 text-center min-w-[150px]">Actions</th>
+                <th className="sticky right-0 z-20 min-w-[160px] bg-[#f8faf9] py-3.5 px-4 text-center dark:bg-[#0b110e] shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.4)]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-emerald-950/6 dark:divide-white/6">
@@ -278,7 +278,7 @@ export const CustomersPage: React.FC = () => {
                           {formatCurrency(c.currentBalance)}
                         </span>
                       </td>
-                      <td className="py-3 px-4 min-w-[150px]">
+                      <td className="sticky right-0 z-10 min-w-[160px] bg-white py-3 px-4 dark:bg-[#111915] shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.4)]">
                         <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                           <button
                             onClick={() => handleViewCustomer(c.id)}
