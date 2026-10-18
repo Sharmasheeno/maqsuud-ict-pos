@@ -21,10 +21,15 @@
   <body class="bg-[#f8faf9] dark:bg-[#070b09] text-slate-900 dark:text-slate-100 antialiased font-sans selection:bg-emerald-500/20 selection:text-emerald-600 dark:selection:text-emerald-400">
     <div id="root"></div>
     <script>
-      if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
-        });
+      if ('serviceWorker' in navigator) {
+        // Clear old PWA caches and retire the legacy worker so every visit
+        // fetches the current app bundle from the network.
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          registrations.forEach((registration) => registration.unregister());
+        }).catch(() => {});
+        if ('caches' in window) {
+          caches.keys().then((keys) => keys.forEach((key) => caches.delete(key))).catch(() => {});
+        }
       }
     </script>
   </body>

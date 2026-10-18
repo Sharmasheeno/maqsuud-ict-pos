@@ -1,33 +1,16 @@
-const CACHE_NAME = 'maqsuud-ict-pos-v8';
-const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icon.svg',
-];
-
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
-  );
+  // POS data and application updates require a live connection. Do not pin an
+  // older app shell or JavaScript bundle in an offline cache.
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
-      );
+      return Promise.all(keys.map((key) => caches.delete(key)));
     })
+      .then(() => self.registration.unregister())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
@@ -38,23 +21,6 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   // Always check the host for the latest app shell first. This keeps installed
   // mobile PWAs from staying on an older cached customer/product interface.
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return response;
-        })
-        .catch(async () => (await caches.match(event.request)) || (await caches.match('/index.html')))
-    );
-    return;
-  }
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request);
-    })
-  );
+  // Do not intercept app resources: stale cached bundles caused the installed
+  // POS to keep showing old product/customer screens after deployment.
 });

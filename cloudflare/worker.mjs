@@ -70,15 +70,61 @@ async function proxyFrontend(request, url) {
     return new Response('Not found', { status: 404 });
   }
 
+  // Retire the old browser-side PWA cache at the Worker origin. The POS is
+  // online-only for API access, so a stale offline shell is worse than no
+  // service worker and can keep old product/customer screens installed.
+  if (url.pathname === '/sw.js') {
+    return new Response(`
+      self.addEventListener('install', event => event.waitUntil(self.skipWaiting()));
+      self.addEventListener('activate', event => event.waitUntil(
+        caches.keys()
+          .then(keys => Promise.all(keys.map(key => caches.delete(key))))
+          .then(() => self.registration.unregister())
+      ));
+    `, {
+      headers: {
+        'Content-Type': 'application/javascript; charset=utf-8',
+        'Cache-Control': 'no-store, max-age=0',
+        'Service-Worker-Allowed': '/',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
+  }
+
   const upstreamUrl = new URL(`${url.pathname}${url.search}`, FRONTEND_ORIGIN);
+  const isAppShell = url.pathname === '/' || url.pathname === '/index.html';
+  if (isAppShell) {
+    // Hugging Face's static CDN can retain the app shell at its unversioned
+    // path. Give each shell fetch a unique upstream cache key so the default
+    // Worker URL always picks up the latest published build and service worker.
+    upstreamUrl.searchParams.set('_refresh', Date.now().toString());
+  }
   const response = await fetch(new Request(upstreamUrl, { method: request.method, redirect: 'follow' }));
   const headers = new Headers(response.headers);
   headers.set('X-Content-Type-Options', 'nosniff');
-  if (url.pathname === '/' || url.pathname === '/index.html') {
-    headers.set('Cache-Control', 'no-cache');
+  if (isAppShell) {
+    headers.set('Cache-Control', 'no-store, max-age=0');
   }
   headers.delete('Content-Encoding');
   headers.delete('Content-Length');
+
+  if (isAppShell && response.ok && request.method !== 'HEAD') {
+    let html = await response.text();
+    // Remove the upstream registration for its legacy service worker, then
+    // clean up any previously installed worker and Cache Storage on this host.
+    html = html.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (script, attributes, body) => {
+      return body.includes("navigator.serviceWorker.register('/sw.js')") ? '' : script;
+    });
+    html = html.replace('</body>', `<script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations()
+          .then(registrations => Promise.all(registrations.map(registration => registration.unregister())))
+          .catch(() => {});
+      }
+      if ('caches' in window) caches.keys().then(keys => keys.forEach(key => caches.delete(key))).catch(() => {});
+    </script></body>`);
+    return new Response(html, { status: response.status, statusText: response.statusText, headers });
+  }
 
   return new Response(response.body, {
     status: response.status,
