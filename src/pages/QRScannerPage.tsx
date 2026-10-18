@@ -19,7 +19,7 @@ import { useApp } from '../context/AppContext';
 import { api } from '../services/apiService';
 
 export const QRScannerPage: React.FC = () => {
-  const { formatCurrency, addToast, setActivePage } = useApp();
+  const { formatCurrency, addToast, setActivePage, setPendingPOSProduct } = useApp();
 
   const [activeTab, setActiveTab] = useState<'scanner' | 'generator'>('scanner');
   const [products, setProducts] = useState<any[]>([]);
@@ -34,6 +34,9 @@ export const QRScannerPage: React.FC = () => {
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const lastScanTimestamp = useRef<number>(0);
+  const startingRef = useRef(false);
+  const runningRef = useRef(false);
+  const stopRequestedRef = useRef(false);
   const cooldownMs = 1500;
 
   useEffect(() => {
@@ -58,8 +61,12 @@ export const QRScannerPage: React.FC = () => {
   };
 
   const startCamera = async () => {
+    if (startingRef.current || runningRef.current) return;
+    startingRef.current = true;
+    stopRequestedRef.current = false;
     setCameraError('');
     try {
+      if (!document.getElementById('qr-reader-container')) return;
       const scanner = new Html5Qrcode('qr-reader-container');
       html5QrCodeRef.current = scanner;
 
@@ -67,11 +74,19 @@ export const QRScannerPage: React.FC = () => {
         { facingMode: 'environment' },
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 },
+          qrbox: { width: 220, height: 220 },
         },
         onScanSuccess,
         onScanFailure
       );
+      runningRef.current = true;
+      if (stopRequestedRef.current) {
+        await scanner.stop();
+        scanner.clear();
+        runningRef.current = false;
+        html5QrCodeRef.current = null;
+        return;
+      }
       setIsScanning(true);
     } catch (err: any) {
       console.error('Camera start error:', err);
@@ -79,16 +94,27 @@ export const QRScannerPage: React.FC = () => {
         'Unable to access camera. Please check browser permissions, or enter the code manually below.'
       );
       setIsScanning(false);
+    } finally {
+      startingRef.current = false;
     }
   };
 
   const stopCamera = async () => {
-    if (html5QrCodeRef.current && isScanning) {
+    const scanner = html5QrCodeRef.current;
+    if (startingRef.current) {
+      stopRequestedRef.current = true;
+      setIsScanning(false);
+      return;
+    }
+    if (scanner && (runningRef.current || startingRef.current)) {
       try {
-        await html5QrCodeRef.current.stop();
-        html5QrCodeRef.current.clear();
+        if (runningRef.current) await scanner.stop();
+        scanner.clear();
       } catch (e) {
         // Already stopped
+      } finally {
+        runningRef.current = false;
+        html5QrCodeRef.current = null;
       }
       setIsScanning(false);
     }
@@ -107,12 +133,15 @@ export const QRScannerPage: React.FC = () => {
 
   const validateAndLookupProduct = async (code: string) => {
     const trimmed = code.trim();
+    if (!trimmed) return;
     try {
       const res = await api.scanQRCode(trimmed);
       if (res.success && res.product) {
         setScannedProduct(res.product);
         setRecentScans((prev) => [res.product, ...prev.filter((p) => p.id !== res.product.id)].slice(0, 8));
         addToast(`Found: ${res.product.name} (${res.product.sku})`, 'success');
+      } else {
+        addToast(res.message || `No item matches barcode "${trimmed}"`, 'error');
       }
     } catch (err: any) {
       addToast(err.message || `No item matches barcode "${trimmed}"`, 'error');
@@ -122,7 +151,7 @@ export const QRScannerPage: React.FC = () => {
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (manualCode.trim()) {
-      validateAndLookupProduct(manualCode.trim());
+      void validateAndLookupProduct(manualCode.trim());
       setManualCode('');
     }
   };
@@ -206,7 +235,7 @@ export const QRScannerPage: React.FC = () => {
           {/* Scanner Viewport (7 Cols) */}
           <div className="lg:col-span-7 bg-white dark:bg-[#111915] rounded-3xl border border-emerald-950/10 dark:border-white/10 shadow-xs p-5 flex flex-col items-center">
             <div className="w-full flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
                 <QrCode className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                 <h3 className="font-display font-extrabold text-sm text-slate-900 dark:text-white">
                   Optical Laser Reader Viewport
@@ -355,7 +384,10 @@ export const QRScannerPage: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={() => setActivePage('pos')}
+                  onClick={() => {
+                    setPendingPOSProduct(scannedProduct);
+                    setActivePage('pos');
+                  }}
                   className="w-full py-2.5 bg-linear-to-r from-[#059669] to-[#16a34a] text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 shadow-md shadow-emerald-600/25"
                 >
                   <ShoppingCart className="w-4 h-4" />

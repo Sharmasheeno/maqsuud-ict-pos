@@ -49,6 +49,8 @@ interface AppContextType {
   toggleTheme: () => void;
   activePage: string;
   setActivePage: (page: string) => void;
+  pendingPOSProduct: any | null;
+  setPendingPOSProduct: (product: any | null) => void;
   business: any;
   refreshBusiness: () => Promise<void>;
   isSubscriptionExpired: boolean;
@@ -147,6 +149,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const resolvedTheme: 'light' | 'dark' = themeMode;
 
   const [activePage, setActivePageState] = useState<string>('dashboard');
+  const [pendingPOSProduct, setPendingPOSProduct] = useState<any | null>(null);
   const [currency, setCurrencyState] = useState<string>('USD');
   const [currencySymbol, setCurrencySymbolState] = useState<string>('$');
   const [business, setBusiness] = useState<any>(null);
@@ -340,6 +343,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleTheme,
         activePage,
         setActivePage,
+        pendingPOSProduct,
+        setPendingPOSProduct,
         business,
         refreshBusiness,
         isSubscriptionExpired,

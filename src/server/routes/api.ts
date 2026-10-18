@@ -1088,6 +1088,7 @@ router.post('/pos/checkout', (req, res) => {
     items,
     customerId,
     customerName,
+    customerPhone,
     paymentMethod,
     saleType,
     cashReceived,
@@ -1190,6 +1191,7 @@ router.post('/pos/checkout', (req, res) => {
     invoiceNumber,
     customerId: customerId || undefined,
     customerName: customerName || 'Walk-in Customer',
+    customerPhone: customerPhone || undefined,
     cashierId: 'usr_cashier',
     cashierName: 'Fatima Abdi',
     items: verifiedItems,
@@ -1207,7 +1209,7 @@ router.post('/pos/checkout', (req, res) => {
     cashChange: cashChange > 0 ? parseFloat(cashChange.toFixed(2)) : 0,
     date: now,
     notes: notes || '',
-    isPOS: true,
+    isPOS: req.body.invoiceMode !== 'generated',
     createdAt: now,
   };
 

@@ -26,7 +26,7 @@ const DEFAULT_FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=600&q=80';
 
 export const POSPage: React.FC = () => {
-  const { formatCurrency, business, addToast, setActivePage } = useApp();
+  const { formatCurrency, business, addToast, setActivePage, pendingPOSProduct, setPendingPOSProduct } = useApp();
 
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -64,6 +64,17 @@ export const POSPage: React.FC = () => {
       setCustomTaxRate(business.taxRate);
     }
   }, [business?.taxRate]);
+
+  useEffect(() => {
+    if (!pendingPOSProduct || products.length === 0) return;
+    const product = products.find((item) => item.id === pendingPOSProduct.id);
+    if (product) {
+      addToCart(product);
+      setPendingPOSProduct(null);
+      setMobilePane('cart');
+      addToast(`${product.name} added to the POS cart`, 'success');
+    }
+  }, [pendingPOSProduct, products]);
 
   // Global physical USB/Bluetooth barcode gun listener on POS page
   useBarcodeScanner({

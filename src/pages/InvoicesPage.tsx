@@ -6,6 +6,8 @@ import {
   FileDown,
   RotateCcw,
   X,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext';
@@ -29,10 +31,27 @@ export const InvoicesPage: React.FC<InvoicesPageProps> = ({ posOnly = false }) =
   const [refundInvoiceTarget, setRefundInvoiceTarget] = useState<any | null>(null);
   const [refundReason, setRefundReason] = useState<string>('');
   const [submittingRefund, setSubmittingRefund] = useState<boolean>(false);
+  const [showCreateInvoice, setShowCreateInvoice] = useState(false);
+  const [products, setProducts] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [invoiceCustomerId, setInvoiceCustomerId] = useState('');
+  const [invoiceProductId, setInvoiceProductId] = useState('');
+  const [invoiceQty, setInvoiceQty] = useState(1);
+  const [invoiceItems, setInvoiceItems] = useState<any[]>([]);
+  const [invoicePaid, setInvoicePaid] = useState('');
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
 
   useEffect(() => {
     loadInvoices();
   }, [search, statusFilter]);
+
+  useEffect(() => {
+    if (posOnly) return;
+    Promise.all([api.getProducts(), api.getCustomers()]).then(([productRes, customerRes]) => {
+      if (productRes.success) setProducts(productRes.products || []);
+      if (customerRes.success) setCustomers(customerRes.customers || []);
+    }).catch((err) => console.error('Invoice form data load failed:', err));
+  }, [posOnly]);
 
   const loadInvoices = async () => {
     setLoading(true);
@@ -45,6 +64,8 @@ export const InvoicesPage: React.FC<InvoicesPageProps> = ({ posOnly = false }) =
         let list = res.invoices;
         if (posOnly) {
           list = list.filter((i: any) => i.isPOS);
+        } else {
+          list = list.filter((i: any) => !i.isPOS);
         }
         setInvoices(list);
       }
@@ -52,6 +73,83 @@ export const InvoicesPage: React.FC<InvoicesPageProps> = ({ posOnly = false }) =
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openInvoiceDetails = async (invoice: any) => {
+    try {
+      if (invoice.items?.length) {
+        setViewInvoice(invoice);
+        return;
+      }
+      const result = await api.getInvoiceById(invoice.id);
+      if (result.success) setViewInvoice(result.invoice);
+      else addToast('Could not load invoice details', 'error');
+    } catch (err: any) {
+      addToast(err.message || 'Could not load invoice details', 'error');
+    }
+  };
+
+  const downloadInvoicePDF = async (invoice: any) => {
+    try {
+      const result = invoice.items?.length ? { success: true, invoice } : await api.getInvoiceById(invoice.id);
+      if (!result.success || !result.invoice?.items?.length) {
+        addToast('Invoice line items are unavailable; PDF was not created.', 'error');
+        return;
+      }
+      exportInvoicePDF(result.invoice, business || {});
+    } catch (err: any) {
+      addToast(err.message || 'Could not load invoice for PDF export', 'error');
+    }
+  };
+
+  const addInvoiceItem = () => {
+    const product = products.find((item) => item.id === invoiceProductId);
+    if (!product) return;
+    const qty = Math.max(1, Math.floor(invoiceQty));
+    const existing = invoiceItems.find((item) => item.productId === product.id);
+    const nextQty = (existing?.quantity || 0) + qty;
+    if (nextQty > Number(product.stock)) {
+      addToast(`Only ${product.stock} ${product.unit || 'units'} of ${product.name} are in stock.`, 'error');
+      return;
+    }
+    setInvoiceItems((items) => existing
+      ? items.map((item) => item.productId === product.id ? { ...item, quantity: nextQty } : item)
+      : [...items, { productId: product.id, name: product.name, sku: product.sku, unitPrice: Number(product.sellingPrice), stock: Number(product.stock), quantity: qty, discount: 0 }]);
+    setInvoiceQty(1);
+  };
+
+  const createSalesInvoice = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const customer = customers.find((item) => item.id === invoiceCustomerId);
+    if (!customer || invoiceItems.length === 0) {
+      addToast('Choose a customer and add at least one product.', 'error');
+      return;
+    }
+    const subtotal = invoiceItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+    const paid = Math.max(0, Number(invoicePaid) || 0);
+    if (paid > subtotal) {
+      addToast('Amount paid cannot exceed the invoice total.', 'error');
+      return;
+    }
+    setCreatingInvoice(true);
+    try {
+      const result = await api.checkoutPOS({
+        invoiceMode: 'generated', items: invoiceItems, customerId: customer.id,
+        customerName: customer.name, customerPhone: customer.phone,
+        saleType: paid >= subtotal ? 'CASH' : 'CREDIT', paymentMethod: paid >= subtotal ? 'Cash' : 'Credit (Deyn)',
+        cashReceived: paid, discountTotal: 0, taxEnabled: false,
+        notes: 'Generated sales invoice',
+      });
+      if (!result.success || !result.invoice) throw new Error(result.message || 'Invoice creation failed');
+      addToast(`Sales invoice ${result.invoice.invoiceNumber} created. Stock and customer balance were updated.`, 'success');
+      setShowCreateInvoice(false);
+      setInvoiceCustomerId(''); setInvoiceItems([]); setInvoicePaid('');
+      await loadInvoices();
+    } catch (err: any) {
+      addToast(err.message || 'Could not create sales invoice', 'error');
+    } finally {
+      setCreatingInvoice(false);
     }
   };
 
@@ -101,13 +199,19 @@ export const InvoicesPage: React.FC<InvoicesPageProps> = ({ posOnly = false }) =
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            {posOnly ? 'POS Checkout Invoices' : 'Sales Invoices & Billing'}
+            {posOnly ? 'POS Checkout Invoices' : 'Generated Sales Invoices'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            View historical invoices, payment settlement records, printable PDFs, and process authorized returns
+            {posOnly
+              ? 'Receipts created automatically by quick POS checkout.'
+              : 'Prepare a customer invoice with itemized products. Submitting records the sale, reduces stock, and updates any customer balance.'}
           </p>
         </div>
 
+        <div className="flex flex-wrap gap-2 self-start">
+        {!posOnly && <button type="button" onClick={() => setShowCreateInvoice(true)} className="px-3.5 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs">
+          <Plus className="w-4 h-4" /> Create Sales Invoice
+        </button>}
         <button
           onClick={handleExportExcel}
           className="px-3.5 py-2 bg-white dark:bg-[#111915] border border-emerald-950/10 dark:border-white/10 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:border-emerald-500/40 flex items-center gap-1.5 self-start shadow-xs transition-all"
@@ -115,6 +219,7 @@ export const InvoicesPage: React.FC<InvoicesPageProps> = ({ posOnly = false }) =
           <FileDown className="w-4 h-4 text-emerald-600" />
           <span>Export Excel</span>
         </button>
+        </div>
       </div>
 
       {/* Filter Bar */}
@@ -229,7 +334,7 @@ export const InvoicesPage: React.FC<InvoicesPageProps> = ({ posOnly = false }) =
                     <td className="py-3.5 px-4 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <button
-                          onClick={() => setViewInvoice(inv)}
+                          onClick={() => void openInvoiceDetails(inv)}
                           title="View Details"
                           className="p-1.5 text-slate-500 hover:text-emerald-600 rounded-lg hover:bg-emerald-500/10 transition-colors"
                         >
@@ -237,7 +342,7 @@ export const InvoicesPage: React.FC<InvoicesPageProps> = ({ posOnly = false }) =
                         </button>
 
                         <button
-                          onClick={() => exportInvoicePDF(inv, business || {})}
+                          onClick={() => void downloadInvoicePDF(inv)}
                           title="Download PDF"
                           className="p-1.5 text-slate-500 hover:text-emerald-600 rounded-lg hover:bg-emerald-500/10 transition-colors"
                         >
@@ -262,6 +367,59 @@ export const InvoicesPage: React.FC<InvoicesPageProps> = ({ posOnly = false }) =
           </table>
         </div>
       </div>
+
+      {/* CREATE SALES INVOICE */}
+      <AnimatePresence>
+        {showCreateInvoice && !posOnly && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 sm:p-5">
+            <motion.form onSubmit={createSalesInvoice} initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 12, opacity: 0 }} className="w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl dark:bg-[#111915] sm:p-6">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-extrabold">Create a sales invoice</h2>
+                  <p className="mt-1 text-xs text-slate-500">This submits a sale immediately: inventory is reduced and any unpaid balance is added to the customer ledger.</p>
+                </div>
+                <button type="button" onClick={() => setShowCreateInvoice(false)} aria-label="Close" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="space-y-4">
+                <label className="block text-xs font-bold">Customer
+                  <select required value={invoiceCustomerId} onChange={(e) => setInvoiceCustomerId(e.target.value)} className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-white/10 dark:bg-black/30">
+                    <option value="">Select customer</option>
+                    {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}{customer.phone ? ` — ${customer.phone}` : ''}</option>)}
+                  </select>
+                </label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_100px_auto] sm:items-end">
+                  <label className="block text-xs font-bold">Product
+                    <select value={invoiceProductId} onChange={(e) => setInvoiceProductId(e.target.value)} className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-white/10 dark:bg-black/30">
+                      <option value="">Select product</option>
+                      {products.filter((product) => Number(product.stock) > 0).map((product) => <option key={product.id} value={product.id}>{product.name} · {formatCurrency(product.sellingPrice)} · stock {product.stock}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-xs font-bold">Quantity
+                    <input type="number" min="1" value={invoiceQty} onChange={(e) => setInvoiceQty(Number(e.target.value))} className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-white/10 dark:bg-black/30" />
+                  </label>
+                  <button type="button" onClick={addInvoiceItem} disabled={!invoiceProductId} className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"><Plus className="inline h-4 w-4" /> Add item</button>
+                </div>
+                <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
+                  <table className="w-full min-w-[420px] text-left text-xs"><thead className="bg-slate-50 dark:bg-white/5"><tr><th className="p-3">Item</th><th className="p-3 text-right">Qty</th><th className="p-3 text-right">Price</th><th className="p-3 text-right">Total</th><th className="p-3" /></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-white/10">
+                    {invoiceItems.map((item) => <tr key={item.productId}><td className="p-3 font-semibold">{item.name}<span className="block text-[10px] text-slate-500">{item.sku}</span></td><td className="p-3 text-right">{item.quantity}</td><td className="p-3 text-right">{formatCurrency(item.unitPrice)}</td><td className="p-3 text-right font-bold">{formatCurrency(item.unitPrice * item.quantity)}</td><td className="p-3 text-right"><button type="button" onClick={() => setInvoiceItems((items) => items.filter((row) => row.productId !== item.productId))} title="Remove item" className="text-rose-600"><Trash2 className="h-4 w-4" /></button></td></tr>)}
+                    {!invoiceItems.length && <tr><td colSpan={5} className="p-5 text-center text-slate-500">Add at least one product.</td></tr>}
+                  </tbody></table>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end">
+                  <div className="text-sm font-extrabold">Invoice total: {formatCurrency(invoiceItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0))}</div>
+                  <label className="block text-xs font-bold">Amount received now
+                    <input type="number" min="0" step="0.01" value={invoicePaid} onChange={(e) => setInvoicePaid(e.target.value)} placeholder="0.00" className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-white/10 dark:bg-black/30" />
+                  </label>
+                </div>
+              </div>
+              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button type="button" onClick={() => setShowCreateInvoice(false)} className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold dark:bg-white/10">Cancel</button>
+                <button type="submit" disabled={creatingInvoice || invoiceItems.length === 0 || !invoiceCustomerId} className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{creatingInvoice ? 'Recording sale…' : 'Create invoice and record sale'}</button>
+              </div>
+            </motion.form>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* VIEW INVOICE MODAL */}
       <AnimatePresence>
@@ -374,7 +532,7 @@ export const InvoicesPage: React.FC<InvoicesPageProps> = ({ posOnly = false }) =
 
               <div className="pt-3 border-t border-emerald-950/8 dark:border-white/8 flex justify-between gap-2">
                 <button
-                  onClick={() => exportInvoicePDF(viewInvoice, business || {})}
+                  onClick={() => void downloadInvoicePDF(viewInvoice)}
                   className="px-4 py-2 bg-linear-to-r from-[#059669] via-[#16a34a] to-[#65a30d] text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
                 >
                   <Printer className="w-4 h-4" />

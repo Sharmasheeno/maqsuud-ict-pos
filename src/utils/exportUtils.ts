@@ -132,8 +132,12 @@ export function exportCustomerProfilePDF(customer: any, business: any, ledgerEnt
 
 // Generate PDF for Invoice Receipt
 export function exportInvoicePDF(invoice: any, business: any) {
+  if (!invoice || !Array.isArray(invoice.items) || invoice.items.length === 0) {
+    throw new Error('Invoice has no item details to print.');
+  }
   const doc = new jsPDF();
   const currencySymbol = business?.currencySymbol || '$';
+  const money = (value: unknown) => `${currencySymbol}${(Number(value) || 0).toFixed(2)}`;
 
   // Header Banner — Deep Obsidian & Emerald with Crimson Strip
   doc.setFillColor(7, 11, 9);
@@ -146,13 +150,13 @@ export function exportInvoicePDF(invoice: any, business: any) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
   doc.setTextColor(255, 255, 255);
-  doc.text((business?.name || 'MAQSUUD ICT POS').toUpperCase(), 14, 14);
+  doc.text(String(business?.name || 'MAQSUUD ICT POS').toUpperCase().slice(0, 38), 14, 14);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(167, 243, 208);
   doc.text(`EVC/WaafiPay: 0611688269 | Somtel/WaafiPay: 0621688269 | Salaam Bank AccN: 38524624`, 14, 21);
-  doc.text(`Address: ${business?.address || 'Mogadishu, Somalia'}`, 14, 27);
+  doc.text(`Address: ${String(business?.address || 'Mogadishu, Somalia').slice(0, 50)}`, 14, 27);
 
   // Right invoice badge
   doc.setFont('helvetica', 'bold');
@@ -161,7 +165,7 @@ export function exportInvoicePDF(invoice: any, business: any) {
   doc.text('INVOICE', 160, 15);
   doc.setFontSize(9);
   doc.setTextColor(255, 255, 255);
-  doc.text(`# ${invoice.invoiceNumber}`, 160, 22);
+  doc.text(`# ${invoice.invoiceNumber || '—'}`, 160, 22);
   doc.text(`Date: ${new Date(invoice.date).toLocaleDateString()}`, 160, 28);
 
   // Customer & Cashier Info
@@ -182,12 +186,12 @@ export function exportInvoicePDF(invoice: any, business: any) {
 
   // Items Table
   const tableData = invoice.items.map((it: any) => [
-    it.name,
+    String(it.name || 'Product'),
     it.sku || '-',
-    `${currencySymbol}${it.unitPrice.toFixed(2)}`,
-    it.quantity,
-    it.discount > 0 ? `${currencySymbol}${it.discount.toFixed(2)}` : '-',
-    `${currencySymbol}${it.total.toFixed(2)}`,
+    money(it.unitPrice),
+    Number(it.quantity) || 0,
+    Number(it.discount) > 0 ? money(it.discount) : '-',
+    money(it.total ?? (Number(it.unitPrice) || 0) * (Number(it.quantity) || 0)),
   ]);
 
   autoTable(doc, {
@@ -196,50 +200,61 @@ export function exportInvoicePDF(invoice: any, business: any) {
     body: tableData,
     headStyles: { fillColor: [5, 150, 105], textColor: [255, 255, 255], fontStyle: 'bold' },
     styles: { fontSize: 8, cellPadding: 3 },
+    margin: { bottom: 28 },
   });
 
-  const finalY = (doc as any).lastAutoTable.finalY + 8;
+  let finalY = (doc as any).lastAutoTable.finalY + 8;
+  const totalsHeight = 38;
+  if (finalY + totalsHeight > doc.internal.pageSize.height - 25) {
+    doc.addPage();
+    finalY = 20;
+  }
 
   // Totals Box
   const startX = 130;
   doc.setFontSize(9);
   doc.text(`Subtotal:`, startX, finalY);
-  doc.text(`${currencySymbol}${invoice.subtotal.toFixed(2)}`, 190, finalY, { align: 'right' });
+  doc.text(money(invoice.subtotal), 190, finalY, { align: 'right' });
 
   if (invoice.discountTotal > 0) {
     doc.text(`Discount:`, startX, finalY + 6);
-    doc.text(`-${currencySymbol}${invoice.discountTotal.toFixed(2)}`, 190, finalY + 6, { align: 'right' });
+    doc.text(`-${money(invoice.discountTotal)}`, 190, finalY + 6, { align: 'right' });
   }
 
   if (invoice.taxTotal > 0) {
     doc.text(`Tax:`, startX, finalY + 12);
-    doc.text(`${currencySymbol}${invoice.taxTotal.toFixed(2)}`, 190, finalY + 12, { align: 'right' });
+    doc.text(money(invoice.taxTotal), 190, finalY + 12, { align: 'right' });
   }
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.text(`Grand Total:`, startX, finalY + 19);
-  doc.text(`${currencySymbol}${invoice.grandTotal.toFixed(2)}`, 190, finalY + 19, { align: 'right' });
+  doc.text(money(invoice.grandTotal), 190, finalY + 19, { align: 'right' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.text(`Amount Paid:`, startX, finalY + 25);
-  doc.text(`${currencySymbol}${invoice.amountPaid.toFixed(2)}`, 190, finalY + 25, { align: 'right' });
+  doc.text(money(invoice.amountPaid), 190, finalY + 25, { align: 'right' });
 
   if (invoice.balanceDue > 0) {
     doc.setTextColor(225, 29, 72);
     doc.setFont('helvetica', 'bold');
     doc.text(`Balance Due:`, startX, finalY + 31);
-    doc.text(`${currencySymbol}${invoice.balanceDue.toFixed(2)}`, 190, finalY + 31, { align: 'right' });
+    doc.text(money(invoice.balanceDue), 190, finalY + 31, { align: 'right' });
   }
 
   // Footer Note
   const pageHeight = doc.internal.pageSize.height;
-  doc.setTextColor(100, 116, 139);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.text(business?.receiptFooter || 'Mahadsanid! Waad ku mahadsantahay ganacsigaaga. Thank you!', 14, pageHeight - 16);
-  doc.text(`Powered by Maqsuud ICT POS • System Verified Invoice`, 14, pageHeight - 11);
+  const pageWidth = doc.internal.pageSize.width;
+  for (let page = 1; page <= doc.getNumberOfPages(); page++) {
+    doc.setPage(page);
+    doc.setTextColor(100, 116, 139);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    const footer = String(business?.receiptFooter || 'Mahadsanid! Waad ku mahadsantahay ganacsigaaga. Thank you!').slice(0, 90);
+    doc.text(footer, 14, pageHeight - 16, { maxWidth: pageWidth - 28 });
+    doc.text(`Maqsuud ICT POS • Page ${page} of ${doc.getNumberOfPages()}`, 14, pageHeight - 10);
+  }
 
   doc.save(`Invoice_${invoice.invoiceNumber}.pdf`);
 }
