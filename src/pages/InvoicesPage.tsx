@@ -440,7 +440,7 @@ export const InvoicesPage: React.FC<InvoicesPageProps> = ({ posOnly = false }) =
               <div className="flex items-center justify-between pb-3 border-b border-emerald-950/8 dark:border-white/8">
                 <div>
                   <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
-                    Invoice {viewInvoice.invoiceNumber}
+                    {viewInvoice.isPOS ? 'POS Checkout Invoice' : 'Generated Sales Invoice'} {viewInvoice.invoiceNumber}
                   </h3>
                   <span className="text-xs text-slate-500">
                     {new Date(viewInvoice.date).toLocaleString()} • {viewInvoice.cashierName}

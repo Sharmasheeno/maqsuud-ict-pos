@@ -38,6 +38,7 @@ export const QRScannerPage: React.FC = () => {
   const runningRef = useRef(false);
   const stopRequestedRef = useRef(false);
   const cooldownMs = 1500;
+  const lookupInProgressRef = useRef(false);
 
   useEffect(() => {
     loadProducts();
@@ -133,7 +134,8 @@ export const QRScannerPage: React.FC = () => {
 
   const validateAndLookupProduct = async (code: string) => {
     const trimmed = code.trim();
-    if (!trimmed) return;
+    if (!trimmed || lookupInProgressRef.current) return;
+    lookupInProgressRef.current = true;
     try {
       const res = await api.scanQRCode(trimmed);
       if (res.success && res.product) {
@@ -145,6 +147,8 @@ export const QRScannerPage: React.FC = () => {
       }
     } catch (err: any) {
       addToast(err.message || `No item matches barcode "${trimmed}"`, 'error');
+    } finally {
+      lookupInProgressRef.current = false;
     }
   };
 
@@ -194,10 +198,10 @@ export const QRScannerPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Optical QR Scanner &amp; Label Studio
+            QR &amp; Barcode Scanner
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Scan physical tags via camera, USB laser barcode readers, or print Maqsuud ICT shelf labels
+            Scan a product label with your camera or enter its SKU. Use the label tab when you need to print QR codes.
           </p>
         </div>
 
@@ -211,7 +215,7 @@ export const QRScannerPage: React.FC = () => {
             }`}
           >
             <Camera className="w-4 h-4" />
-            <span>Laser Camera Scanner</span>
+            <span>Scan products</span>
           </button>
           <button
             onClick={() => {
@@ -238,7 +242,7 @@ export const QRScannerPage: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
                 <QrCode className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                 <h3 className="font-display font-extrabold text-sm text-slate-900 dark:text-white">
-                  Optical Laser Reader Viewport
+                  Camera scanner
                 </h3>
               </div>
 
@@ -289,16 +293,8 @@ export const QRScannerPage: React.FC = () => {
                   </div>
                   <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">Optical Sensor Standby</h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs">
-                    Click &ldquo;Activate Camera&rdquo; to scan QR codes or barcodes, or use the manual SKU input below.
+                    Press Start Camera above, or enter the SKU or barcode below.
                   </p>
-                  <motion.button
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.96 }}
-                    onClick={startCamera}
-                    className="mt-4 px-5 py-2.5 bg-linear-to-r from-[#059669] via-[#16a34a] to-[#65a30d] text-white rounded-xl text-xs font-extrabold shadow-lg shadow-emerald-600/30"
-                  >
-                    Activate Camera
-                  </motion.button>
                 </div>
               )}
             </div>

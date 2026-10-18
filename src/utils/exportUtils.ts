@@ -162,7 +162,7 @@ export function exportInvoicePDF(invoice: any, business: any) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
   doc.setTextColor(16, 185, 129);
-  doc.text('INVOICE', 160, 15);
+  doc.text(invoice.isPOS ? 'POS INVOICE' : 'SALES INVOICE', 160, 15);
   doc.setFontSize(9);
   doc.setTextColor(255, 255, 255);
   doc.text(`# ${invoice.invoiceNumber || '—'}`, 160, 22);
