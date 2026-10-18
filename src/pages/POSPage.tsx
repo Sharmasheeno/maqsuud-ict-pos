@@ -66,14 +66,13 @@ export const POSPage: React.FC = () => {
   }, [business?.taxRate]);
 
   useEffect(() => {
-    if (!pendingPOSProduct || products.length === 0) return;
-    const product = products.find((item) => item.id === pendingPOSProduct.id);
-    if (product) {
-      addToCart(product);
-      setPendingPOSProduct(null);
-      setMobilePane('cart');
-      addToast(`${product.name} added to the POS cart`, 'success');
-    }
+    if (!pendingPOSProduct) return;
+    // The scanner response already contains the cart fields. Use it immediately
+    // instead of waiting for the independent POS catalog request to finish.
+    const product = products.find((item) => item.id === pendingPOSProduct.id) || pendingPOSProduct;
+    addToCart(product);
+    setPendingPOSProduct(null);
+    setMobilePane('cart');
   }, [pendingPOSProduct, products]);
 
   // Global physical USB/Bluetooth barcode gun listener on POS page

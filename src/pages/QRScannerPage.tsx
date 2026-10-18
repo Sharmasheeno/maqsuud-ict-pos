@@ -33,12 +33,11 @@ export const QRScannerPage: React.FC = () => {
   const [batchQRList, setBatchQRList] = useState<{ product: any; qrDataUrl: string }[]>([]);
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
-  const lastScanTimestamp = useRef<number>(0);
   const startingRef = useRef(false);
   const runningRef = useRef(false);
   const stopRequestedRef = useRef(false);
-  const cooldownMs = 1500;
   const lookupInProgressRef = useRef(false);
+  const lastDecodedCodeRef = useRef('');
 
   useEffect(() => {
     loadProducts();
@@ -62,9 +61,10 @@ export const QRScannerPage: React.FC = () => {
   };
 
   const startCamera = async () => {
-    if (startingRef.current || runningRef.current) return;
+    if (startingRef.current || runningRef.current || lookupInProgressRef.current) return;
     startingRef.current = true;
     stopRequestedRef.current = false;
+    lastDecodedCodeRef.current = '';
     setCameraError('');
     try {
       if (!document.getElementById('qr-reader-container')) return;
@@ -122,12 +122,13 @@ export const QRScannerPage: React.FC = () => {
   };
 
   const onScanSuccess = async (decodedText: string) => {
-    const now = Date.now();
-    if (now - lastScanTimestamp.current < cooldownMs) {
-      return;
-    }
-    lastScanTimestamp.current = now;
-    validateAndLookupProduct(decodedText);
+    const code = decodedText.trim();
+    if (!code || lookupInProgressRef.current || lastDecodedCodeRef.current === code) return;
+    // Claim this decode synchronously because the camera can report the same frame
+    // several times before the scanner has time to stop.
+    lastDecodedCodeRef.current = code;
+    await stopCamera();
+    await validateAndLookupProduct(code);
   };
 
   const onScanFailure = () => {};
@@ -141,7 +142,6 @@ export const QRScannerPage: React.FC = () => {
       if (res.success && res.product) {
         setScannedProduct(res.product);
         setRecentScans((prev) => [res.product, ...prev.filter((p) => p.id !== res.product.id)].slice(0, 8));
-        addToast(`Found: ${res.product.name} (${res.product.sku})`, 'success');
       } else {
         addToast(res.message || `No item matches barcode "${trimmed}"`, 'error');
       }
