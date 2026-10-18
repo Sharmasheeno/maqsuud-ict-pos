@@ -9,13 +9,14 @@ import {
   Eye,
   Edit,
   X,
+  Trash2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { api } from '../services/apiService';
 import { exportCustomerProfilePDF, exportToExcel } from '../utils/exportUtils';
 
 export const CustomersPage: React.FC = () => {
-  const { formatCurrency, business, addToast } = useApp();
+  const { formatCurrency, business, addToast, user } = useApp();
 
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -23,6 +24,7 @@ export const CustomersPage: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
   const [viewCustomerDetails, setViewCustomerDetails] = useState<any | null>(null);
+  const [deletingCustomerId, setDeletingCustomerId] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -99,6 +101,30 @@ export const CustomersPage: React.FC = () => {
       }
     } catch (err: any) {
       addToast(err.message || 'Failed to load customer profile', 'error');
+    }
+  };
+
+  const handleDeleteCustomer = async (customer: any) => {
+    const confirmed = window.confirm(
+      `Permanently delete ${customer.name} (${customer.customerId}) and remove their linked invoices, payments, and ledger entries? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingCustomerId(customer.id);
+    try {
+      const res = await api.deleteCustomer(customer.id);
+      if (!res.success) {
+        throw new Error(res.message || 'Failed to delete customer');
+      }
+      setCustomers((current) => current.filter((item) => item.id !== customer.id));
+      if (viewCustomerDetails?.customer?.id === customer.id) {
+        setViewCustomerDetails(null);
+      }
+      addToast(res.message || 'Customer and linked records deleted', 'success');
+    } catch (err: any) {
+      addToast(err.message || 'Failed to delete customer', 'error');
+    } finally {
+      setDeletingCustomerId(null);
     }
   };
 
@@ -276,6 +302,18 @@ export const CustomersPage: React.FC = () => {
                           >
                             <Edit className="w-3.5 h-3.5" />
                           </button>
+
+                          {user?.role?.toLowerCase() === 'admin' && (
+                            <button
+                              onClick={() => handleDeleteCustomer(c)}
+                              disabled={deletingCustomerId === c.id}
+                              title="Delete customer and linked history"
+                              aria-label={`Delete ${c.name} and linked records`}
+                              className="p-1.5 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-500/10 disabled:opacity-50 disabled:cursor-wait"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

@@ -850,12 +850,43 @@ router.put('/customers/:id', (req, res) => {
 });
 
 router.delete('/customers/:id', (req, res) => {
+  if (!requireAdmin(req, res)) return;
   const { id } = req.params;
+  let deleted = false;
+  let deletedInvoices = 0;
+  let deletedPayments = 0;
+  let deletedLedgerEntries = 0;
+
   dbStore.update((d) => {
-    const c = d.customers.find((item) => item.id === id);
-    if (c) c.isArchived = true;
+    const customer = d.customers.find((item) => item.id === id);
+    if (!customer) return;
+
+    const linkedInvoiceIds = new Set(
+      d.invoices.filter((invoice) => invoice.customerId === id).map((invoice) => invoice.id)
+    );
+
+    d.customers = d.customers.filter((item) => item.id !== id);
+    deletedInvoices = d.invoices.length - d.invoices.filter((invoice) => invoice.customerId !== id).length;
+    d.invoices = d.invoices.filter((invoice) => invoice.customerId !== id);
+    const remainingPayments = d.customerPayments.filter(
+      (payment) => payment.customerId !== id && (!payment.invoiceId || !linkedInvoiceIds.has(payment.invoiceId))
+    );
+    deletedPayments = d.customerPayments.length - remainingPayments.length;
+    d.customerPayments = remainingPayments;
+    const remainingLedger = d.customerLedger.filter((entry) => entry.customerId !== id);
+    deletedLedgerEntries = d.customerLedger.length - remainingLedger.length;
+    d.customerLedger = remainingLedger;
+    deleted = true;
   });
-  return res.json({ success: true, message: 'Customer deleted successfully' });
+
+  if (!deleted) {
+    return res.status(404).json({ success: false, message: 'Customer not found' });
+  }
+
+  return res.json({
+    success: true,
+    message: `Customer and linked history deleted (${deletedInvoices} invoices, ${deletedPayments} payments, ${deletedLedgerEntries} ledger entries).`,
+  });
 });
 
 // Record Customer Payment (Rasiid)
